@@ -1,6 +1,6 @@
 pkgname=distro-panel
 pkgver=0.1
-pkgrel=20
+pkgrel=21
 pkgdesc='Popup panel for the dwm bar'
 arch=(x86_64)
 license=(MIT)

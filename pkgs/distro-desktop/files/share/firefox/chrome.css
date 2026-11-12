@@ -1,11 +1,11 @@
 @-moz-document url(chrome://browser/content/browser.xhtml) {
 	:root {
-		--d-bg: #18191c;
-		--d-page: rgba(24, 25, 28, 0.8);
-		--d-hover: #222327;
-		--d-sel: #2c2e33;
-		--d-fg: #d2d4d9;
-		--d-dim: #7b7f88;
+		--d-bg: #1e2030;
+		--d-page: rgba(34, 36, 54, 0.8);
+		--d-hover: #262a40;
+		--d-sel: #2f334d;
+		--d-fg: #c8d3f5;
+		--d-dim: #828bb8;
 		--d-acc: #82aaff;
 		--border-radius-small: 0px !important;
 		--border-radius-medium: 0px !important;

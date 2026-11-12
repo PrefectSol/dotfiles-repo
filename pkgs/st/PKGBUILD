@@ -1,6 +1,6 @@
 pkgname=st
 pkgver=0.9.3
-pkgrel=8
+pkgrel=9
 pkgdesc='Simple terminal'
 arch=(x86_64)
 url=https://st.suckless.org

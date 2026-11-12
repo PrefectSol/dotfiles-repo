@@ -1,5 +1,5 @@
 title-text: ""
-desktop-color: "#18191c"
+desktop-color: "#222436"
 terminal-font: "Mono Regular 32"
 terminal-left: "0"
 terminal-top: "0"
@@ -21,8 +21,8 @@ terminal-border: "0"
   width = 716
   height = 288
   item_font = "Mono Regular 32"
-  item_color = "#d2d4d9"
-  selected_item_color = "#ffffff"
+  item_color = "#c8d3f5"
+  selected_item_color = "#e0e6ff"
   item_height = 48
   item_spacing = 12
   item_padding = 0
@@ -40,7 +40,7 @@ terminal-border: "0"
   align = "center"
   id = "__timeout__"
   text = "booting in %d seconds"
-  color = "#7b7f88"
+  color = "#636da6"
   font = "Mono Regular 32"
 }
 
@@ -49,7 +49,7 @@ terminal-border: "0"
   top = 100%-72
   width = 76
   text = "boot"
-  color = "#d2d4d9"
+  color = "#c8d3f5"
   font = "Mono Regular 32"
 }
 
@@ -67,7 +67,7 @@ terminal-border: "0"
   top = 100%-72
   width = 76
   text = "edit"
-  color = "#d2d4d9"
+  color = "#c8d3f5"
   font = "Mono Regular 32"
 }
 
@@ -85,7 +85,7 @@ terminal-border: "0"
   top = 100%-72
   width = 133
   text = "console"
-  color = "#d2d4d9"
+  color = "#c8d3f5"
   font = "Mono Regular 32"
 }
 

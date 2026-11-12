@@ -22,6 +22,7 @@ done
 for p in $(printf '%s\n' "${pkgs[@]}" | sort | cut -d' ' -f2); do
 	echo "==> $p"
 	(cd "$repo/pkgs/$p" && BUILDDIR=$build PKGDEST=$out SRCDEST=$build makepkg -fcs --noconfirm --needed)
-	repo-add -q -n -R "$db" "$out"/*.pkg.tar.zst
+	mapfile -t files < <(cd "$repo/pkgs/$p" && PKGDEST=$out makepkg --packagelist)
+	repo-add -q -n -R "$db" "${files[@]}"
 	sudo pacman -Sy >/dev/null
 done
