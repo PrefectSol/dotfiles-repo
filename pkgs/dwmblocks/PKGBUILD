@@ -1,0 +1,24 @@
+pkgname=dwmblocks
+pkgver=0.469e684
+pkgrel=5
+pkgdesc='Async modular status bar for dwm'
+arch=(x86_64)
+url=https://github.com/UtkarshVerma/dwmblocks-async
+license=(GPL-2.0-only)
+depends=(libxcb xcb-util)
+
+prepare() {
+  rm -rf dwmblocks
+  cp -r "$startdir/dwmblocks" .
+}
+
+build() {
+  cd dwmblocks
+  make
+}
+
+package() {
+  cd dwmblocks
+  make PREFIX=/usr DESTDIR="$pkgdir" install
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

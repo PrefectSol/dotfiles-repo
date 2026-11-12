@@ -1,0 +1,5 @@
+[Desktop Entry]
+Name=dwm
+Comment=dwm session
+Exec=distro-session
+Type=XSession

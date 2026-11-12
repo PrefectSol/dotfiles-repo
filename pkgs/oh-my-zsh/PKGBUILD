@@ -1,0 +1,28 @@
+pkgname=oh-my-zsh
+pkgver=r8009.6010fb626
+pkgrel=1
+pkgdesc='Oh My Zsh, installed system-wide'
+arch=(any)
+url=https://ohmyz.sh
+license=(MIT)
+depends=(zsh git zsh-autosuggestions zsh-syntax-highlighting)
+makedepends=(git)
+source=("ohmyzsh::git+https://github.com/ohmyzsh/ohmyzsh.git")
+sha256sums=(SKIP)
+
+pkgver() {
+  cd ohmyzsh
+  printf 'r%s.%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+package() {
+  local d=$pkgdir/usr/share/oh-my-zsh p
+  install -d "$d"
+  cp -r ohmyzsh/. "$d"
+  rm -rf "$d/.git" "$d/.github"
+  install -Dm644 ohmyzsh/LICENSE.txt "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  for p in zsh-autosuggestions zsh-syntax-highlighting; do
+    install -d "$d/custom/plugins/$p"
+    printf 'source /usr/share/zsh/plugins/%s/%s.zsh\n' "$p" "$p" >"$d/custom/plugins/$p/$p.plugin.zsh"
+  done
+}

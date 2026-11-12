@@ -1,0 +1,52 @@
+# base
+base
+linux
+base-devel
+grub
+efibootmgr
+os-prober
+sudo
+networkmanager
+openssh
+git
+neovim
+tree-sitter-cli
+nodejs
+npm
+lazygit
+man-db
+man-pages
+reflector
+pacman-contrib
+bash-completion
+zsh
+terminus-font
+htop
+fastfetch
+wget
+unzip
+rsync
+
+# audio
+pipewire
+pipewire-alsa
+pipewire-pulse
+wireplumber
+
+# x11
+xorg-server
+xorg-xinit
+xorg-xrandr
+xorg-xsetroot
+xorg-xset
+xorg-xprop
+xorg-xinput
+mesa
+xterm
+
+# fonts
+ttf-jetbrains-mono
+ttf-jetbrains-mono-nerd
+noto-fonts
+noto-fonts-cjk
+noto-fonts-emoji

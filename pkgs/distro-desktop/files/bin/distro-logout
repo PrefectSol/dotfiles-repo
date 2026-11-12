@@ -1,0 +1,3 @@
+#!/bin/sh
+touch "$XDG_RUNTIME_DIR/distro-logout"
+pkill -x -u "$(id -u)" dwm

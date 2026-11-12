@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>New Tab</title>
+<style>
+html, body {
+	margin: 0;
+	height: 100%;
+	background: transparent;
+	color: #d2d4d9;
+	font: 15px "JetBrains Mono", monospace;
+}
+main {
+	box-sizing: border-box;
+	width: min(960px, calc(100% - 16px));
+	margin: 0 auto;
+	background: #18191c;
+	border: 1px solid #43474f;
+	border-top: none;
+}
+header {
+	display: flex;
+	height: 36px;
+	line-height: 36px;
+}
+header span {
+	padding: 0 14px;
+	cursor: default;
+	user-select: none;
+	background: #2c2e33;
+	color: #ffffff;
+}
+a, .edit {
+	display: flex;
+	height: 36px;
+	line-height: 36px;
+	padding: 0 14px;
+	color: #d2d4d9;
+	text-decoration: none;
+	outline: none;
+	white-space: nowrap;
+}
+b {
+	flex: none;
+	width: 3ch;
+	color: #7b7f88;
+	font-weight: normal;
+}
+a span {
+	flex: none;
+	max-width: 40%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+a em {
+	flex: 1;
+	min-width: 0;
+	padding-left: 2ch;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	text-align: right;
+	color: #7b7f88;
+	font-style: normal;
+}
+a i {
+	display: none;
+	padding-left: 2ch;
+	color: #7b7f88;
+	font-style: normal;
+	cursor: pointer;
+}
+a:hover i, a:focus i {
+	display: block;
+}
+a i:hover {
+	color: #82aaff;
+}
+a i.del:hover {
+	color: #f05454;
+}
+a:hover {
+	background: #222327;
+}
+a:focus, .edit {
+	background: #2c2e33;
+	box-shadow: inset 2px 0 0 #82aaff;
+	color: #ffffff;
+}
+a:focus b, .edit b {
+	color: #82aaff;
+}
+input {
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: none;
+	outline: none;
+	background: transparent;
+	color: #ffffff;
+	caret-color: #82aaff;
+	font: inherit;
+}
+input::placeholder {
+	color: #7b7f88;
+}
+input.name {
+	flex: 0 0 30%;
+}
+input.url {
+	flex: 1;
+	padding-left: 2ch;
+}
+</style>
+</head>
+<body>
+<main>
+<header><span>links</span></header>
+<div id="list"></div>
+</main>
+<script>
+const list = document.getElementById("list");
+let links = load();
+let editing = -1;
+
+function load() {
+	try {
+		return JSON.parse(localStorage.getItem("links")) || [];
+	} catch (e) {
+		return [];
+	}
+}
+
+function save() {
+	try {
+		localStorage.setItem("links", JSON.stringify(links));
+	} catch (e) {}
+}
+
+function el(tag, cls, text) {
+	const e = document.createElement(tag);
+	if (cls)
+		e.className = cls;
+	if (text)
+		e.textContent = text;
+	return e;
+}
+
+function num(i) {
+	return el("b", "", i < 9 ? String(i + 1) : "");
+}
+
+function row(l, i) {
+	const a = el("a");
+	a.href = l.url;
+	a.dataset.i = i;
+	a.append(num(i), el("span", "", l.name), el("em", "", l.url), el("i", "change", "edit"), el("i", "del", "×"));
+	return a;
+}
+
+function form(i) {
+	const l = links[i] || { name: "", url: "" };
+	const f = el("div", "edit");
+	const name = el("input", "name");
+	const url = el("input", "url");
+	name.placeholder = "name";
+	name.value = l.name;
+	url.placeholder = "https://";
+	url.value = l.url;
+	f.append(num(i), name, url);
+	f.addEventListener("keydown", e => {
+		e.stopPropagation();
+		if (e.key === "Enter")
+			commit(i, name.value.trim(), url.value.trim());
+		else if (e.key === "Escape")
+			cancel(i);
+		else
+			return;
+		e.preventDefault();
+	});
+	return f;
+}
+
+function render(focus) {
+	list.textContent = "";
+	links.forEach((l, i) => list.append(i === editing ? form(i) : row(l, i)));
+	if (editing === links.length)
+		list.append(form(editing));
+	const f = list.querySelector(".edit input");
+	const a = list.querySelector(`a[data-i="${Math.min(focus, links.length - 1)}"]`);
+	if (f)
+		f.focus();
+	else if (a)
+		a.focus();
+}
+
+function edit(i) {
+	editing = i;
+	render();
+}
+
+function cancel(i) {
+	editing = -1;
+	render(i);
+}
+
+function commit(i, name, url) {
+	if (!url)
+		return cancel(i);
+	if (!/^[a-z][a-z0-9+.-]*:/i.test(url))
+		url = "https://" + url;
+	if (!name) {
+		try {
+			name = new URL(url).hostname.replace(/^www\./, "");
+		} catch (e) {
+			name = url;
+		}
+	}
+	links[i] = { name, url };
+	save();
+	cancel(i);
+}
+
+function remove(i) {
+	links.splice(i, 1);
+	save();
+	render(i);
+}
+
+function move(i, d) {
+	const j = i + d;
+	if (j < 0 || j >= links.length)
+		return;
+	[links[i], links[j]] = [links[j], links[i]];
+	save();
+	render(j);
+}
+
+list.addEventListener("click", e => {
+	const a = e.target.closest("a");
+	if (!a)
+		return;
+	const i = +a.dataset.i;
+	if (e.target.classList.contains("change"))
+		edit(i);
+	else if (e.target.classList.contains("del"))
+		remove(i);
+	else
+		return;
+	e.preventDefault();
+});
+
+document.querySelector("header span").addEventListener("dblclick", () => edit(links.length));
+
+addEventListener("keydown", e => {
+	if (editing >= 0 || e.ctrlKey || e.altKey || e.metaKey)
+		return;
+	const items = [...list.querySelectorAll("a")];
+	const cur = items.indexOf(document.activeElement);
+	const n = /^Digit[1-9]$/.test(e.code) ? +e.code[5] : 0;
+	if (n && !e.shiftKey && n <= links.length)
+		location.href = links[n - 1].url;
+	else if ((e.code === "KeyJ" || e.code === "ArrowDown") && e.shiftKey && cur >= 0)
+		move(cur, 1);
+	else if ((e.code === "KeyK" || e.code === "ArrowUp") && e.shiftKey && cur >= 0)
+		move(cur, -1);
+	else if ((e.code === "KeyJ" || e.code === "ArrowDown") && items.length)
+		items[(cur + 1) % items.length].focus();
+	else if ((e.code === "KeyK" || e.code === "ArrowUp") && items.length)
+		items[(cur - 1 + items.length) % items.length].focus();
+	else if (e.code === "KeyA")
+		edit(links.length);
+	else if (e.code === "KeyE" && cur >= 0)
+		edit(cur);
+	else if ((e.code === "KeyD" || e.code === "Delete") && cur >= 0)
+		remove(cur);
+	else
+		return;
+	e.preventDefault();
+});
+
+render();
+</script>
+</body>
+</html>

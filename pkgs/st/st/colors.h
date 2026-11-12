@@ -1,0 +1,25 @@
+static const char *colorname[] = {
+	"#18191c",
+	"#f05454",
+	"#7bc47f",
+	"#e7c25c",
+	"#82aaff",
+	"#b48cf2",
+	"#5fc4d0",
+	"#d2d4d9",
+	"#7b7f88",
+	"#ff7a7a",
+	"#9ad89d",
+	"#f2d483",
+	"#a3bdff",
+	"#caa9f7",
+	"#86d8e2",
+	"#ffffff",
+
+	[255] = 0,
+
+	"#ffffff",
+	"#7b7f88",
+	"#d2d4d9",
+	"#18191c",
+};

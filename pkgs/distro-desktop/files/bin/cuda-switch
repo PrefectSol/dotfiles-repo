@@ -1,0 +1,57 @@
+#!/bin/bash
+set -euo pipefail
+link=${XDG_DATA_HOME:-$HOME/.local/share}/distro/cuda
+
+version() {
+	local d=$1
+	if [[ -f $d/version.json ]]; then
+		grep -m1 -A2 '"cuda"' "$d/version.json" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1
+	elif [[ -x $d/bin/nvcc ]]; then
+		"$d/bin/nvcc" --version | grep -oE 'release [0-9.]+' | cut -d' ' -f2
+	fi
+}
+
+dirs() {
+	for d in /opt/cuda /opt/cuda-* /usr/local/cuda-*; do
+		[[ -d $d && ! -L $d && -n $(version "$d") ]] && echo "$d"
+	done
+}
+
+current() {
+	if [[ -L $link ]]; then
+		readlink "$link"
+	elif [[ -d /opt/cuda ]]; then
+		echo /opt/cuda
+	fi
+}
+
+case ${1:-list} in
+list)
+	cur=$(current)
+	found=
+	for d in $(dirs); do
+		found=1
+		printf ' %s %s (%s)\n' "$([[ $d == "$cur" ]] && echo '*' || echo ' ')" "$(version "$d")" "$d"
+	done
+	[[ -n $found ]] || echo "no cuda installed (/opt/cuda, /opt/cuda-*, /usr/local/cuda-*)"
+	;;
+set)
+	v=${2:-}
+	target=
+	for d in $(dirs); do
+		[[ $(version "$d") == "$v" || $(version "$d") == "$v".* ]] && { target=$d; break; }
+	done
+	[[ -n $target ]] || { echo "cuda $v is not installed, see: cuda-switch list" >&2; exit 1; }
+	if [[ $target == /opt/cuda ]]; then
+		rm -f "$link"
+	else
+		mkdir -p "${link%/*}"
+		ln -sfn "$target" "$link"
+	fi
+	echo "cuda $(version "$target") ($target)"
+	;;
+*)
+	echo "usage: cuda-switch [list | set VERSION]" >&2
+	exit 1
+	;;
+esac

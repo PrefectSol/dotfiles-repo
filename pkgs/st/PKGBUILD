@@ -1,0 +1,24 @@
+pkgname=st
+pkgver=0.9.3
+pkgrel=8
+pkgdesc='Simple terminal'
+arch=(x86_64)
+url=https://st.suckless.org
+license=(MIT)
+depends=(libx11 libxft freetype2 fontconfig ncurses)
+
+prepare() {
+  rm -rf st
+  cp -r "$startdir/st" .
+}
+
+build() {
+  cd st
+  make
+}
+
+package() {
+  cd st
+  make PREFIX=/usr DESTDIR="$pkgdir" install
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

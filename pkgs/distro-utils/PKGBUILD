@@ -1,0 +1,22 @@
+pkgname=distro-utils
+pkgver=0.1
+pkgrel=8
+pkgdesc='Small X11 helpers for the desktop'
+arch=(x86_64)
+license=(MIT)
+depends=(libx11)
+
+prepare() {
+  rm -rf utils
+  cp -r "$startdir/utils" .
+}
+
+build() {
+  cd utils
+  make
+}
+
+package() {
+  cd utils
+  make PREFIX=/usr DESTDIR="$pkgdir" install
+}

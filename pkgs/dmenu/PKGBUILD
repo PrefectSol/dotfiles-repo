@@ -1,0 +1,24 @@
+pkgname=dmenu
+pkgver=5.4
+pkgrel=9
+pkgdesc='Dynamic menu'
+arch=(x86_64)
+url=https://tools.suckless.org/dmenu
+license=(MIT)
+depends=(libx11 libxinerama libxft freetype2 fontconfig imlib2)
+
+prepare() {
+  rm -rf dmenu
+  cp -r "$startdir/dmenu" .
+}
+
+build() {
+  cd dmenu
+  make
+}
+
+package() {
+  cd dmenu
+  make PREFIX=/usr DESTDIR="$pkgdir" install
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

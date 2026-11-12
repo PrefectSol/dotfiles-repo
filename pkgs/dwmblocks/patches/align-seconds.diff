@@ -1,0 +1,37 @@
+--- a/src/timer.c	2026-11-11 10:10:01.513000000 +0000
++++ b/src/timer.c	2026-11-11 10:10:01.680251031 +0000
+@@ -3,6 +3,7 @@
+ #include <errno.h>
+ #include <stdbool.h>
+ #include <stdio.h>
++#include <sys/time.h>
+ #include <unistd.h>
+ 
+ #include "block.h"
+@@ -45,12 +46,21 @@
+ }
+ 
+ int timer_arm(timer *const timer) {
+-    errno = 0;
+-    (void)alarm(timer->tick);
++    struct timeval now;
++    struct itimerval it = {0};
+ 
+-    if (errno != 0) {
+-        (void)fprintf(stderr, "error: could not arm timer\n");
+-        return 1;
++    if (timer->tick != 0) {
++        (void)gettimeofday(&now, NULL);
++        it.it_value.tv_sec = timer->tick - 1;
++        it.it_value.tv_usec = 1000000 - now.tv_usec;
++        if (it.it_value.tv_usec >= 1000000) {
++            it.it_value.tv_sec++;
++            it.it_value.tv_usec -= 1000000;
++        }
++        if (setitimer(ITIMER_REAL, &it, NULL) != 0) {
++            (void)fprintf(stderr, "error: could not arm timer\n");
++            return 1;
++        }
+     }
+ 
+     // Wrap `time` to the interval [1, reset_value].

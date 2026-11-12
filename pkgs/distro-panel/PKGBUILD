@@ -1,0 +1,22 @@
+pkgname=distro-panel
+pkgver=0.1
+pkgrel=20
+pkgdesc='Popup panel for the dwm bar'
+arch=(x86_64)
+license=(MIT)
+depends=(libx11 libxft libxinerama libxtst fontconfig wireplumber)
+
+prepare() {
+  rm -rf panel
+  cp -r "$startdir/panel" .
+}
+
+build() {
+  cd panel
+  make
+}
+
+package() {
+  cd panel
+  make PREFIX=/usr DESTDIR="$pkgdir" install
+}

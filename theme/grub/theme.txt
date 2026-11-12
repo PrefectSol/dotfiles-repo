@@ -1,0 +1,99 @@
+title-text: ""
+desktop-color: "#18191c"
+terminal-font: "Mono Regular 32"
+terminal-left: "0"
+terminal-top: "0"
+terminal-width: "100%"
+terminal-height: "100%"
+terminal-border: "0"
+
++ image {
+  left = 50%-390
+  top = 50%-180
+  width = 780
+  height = 360
+  file = "frame.png"
+}
+
++ boot_menu {
+  left = 50%-358
+  top = 50%-144
+  width = 716
+  height = 288
+  item_font = "Mono Regular 32"
+  item_color = "#d2d4d9"
+  selected_item_color = "#ffffff"
+  item_height = 48
+  item_spacing = 12
+  item_padding = 0
+  icon_width = 0
+  icon_height = 0
+  item_icon_space = 0
+  scrollbar = false
+  selected_item_pixmap_style = "sel_*.png"
+}
+
++ label {
+  left = 50%-390
+  top = 50%+218
+  width = 780
+  align = "center"
+  id = "__timeout__"
+  text = "booting in %d seconds"
+  color = "#7b7f88"
+  font = "Mono Regular 32"
+}
+
++ label {
+  left = 100%-589
+  top = 100%-72
+  width = 76
+  text = "boot"
+  color = "#d2d4d9"
+  font = "Mono Regular 32"
+}
+
++ label {
+  left = 100%-494
+  top = 100%-72
+  width = 95
+  text = "enter"
+  color = "#82aaff"
+  font = "Mono Regular 32"
+}
+
++ label {
+  left = 100%-361
+  top = 100%-72
+  width = 76
+  text = "edit"
+  color = "#d2d4d9"
+  font = "Mono Regular 32"
+}
+
++ label {
+  left = 100%-266
+  top = 100%-72
+  width = 19
+  text = "e"
+  color = "#82aaff"
+  font = "Mono Regular 32"
+}
+
++ label {
+  left = 100%-209
+  top = 100%-72
+  width = 133
+  text = "console"
+  color = "#d2d4d9"
+  font = "Mono Regular 32"
+}
+
++ label {
+  left = 100%-57
+  top = 100%-72
+  width = 19
+  text = "c"
+  color = "#82aaff"
+  font = "Mono Regular 32"
+}
