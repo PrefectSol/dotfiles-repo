@@ -45,21 +45,10 @@ def grub():
     png(os.path.join(d, "sel_c.png"), 1, 1, lambda x, y: rgba("sel"))
     png(os.path.join(d, "sel_e.png"), PAD, 1, lambda x, y: rgba("sel"))
 
-    with open(os.path.join(d, "theme.txt"), "w") as f:
-        f.write(menu_theme([("boot", "enter"), ("edit", "e"), ("console", "c")]))
-    with open(os.path.join(repo, "theme/ventoy/theme.txt"), "w") as f:
-        f.write(menu_theme([("boot", "enter"), ("tools", "F5"), ("help", "F1")]))
-    with open(os.path.join(d, "layout"), "w") as f:
-        f.write(f"{ITEM_H + ITEM_GAP} {FRAME} {INNER - ITEM_GAP} {ITEM_GAP} {2 * CHAR} {ITEMS[0]} {ITEMS[-1]}\n")
-    with open(os.path.join(d, "font"), "w") as f:
-        f.write(f"{FONT_SRC} {FONT_SIZE}\n")
-
-
-def menu_theme(keys):
     l = -BOX_W // 2
     pos = lambda v: "50%%%+d" % v
 
-    parts = [p for name, key in keys for p in ((name, 7), (key, "acc"))]
+    parts = [("boot", 7), ("enter", "acc"), ("edit", 7), ("e", "acc"), ("console", 7), ("c", "acc")]
     footer, col = [], 0
     for i, (text, color) in enumerate(parts):
         footer.append((text, color, col))
@@ -123,7 +112,12 @@ terminal-border: "0"
   font = "{FONT}"
 }}
 '''
-    return out
+    with open(os.path.join(d, "theme.txt"), "w") as f:
+        f.write(out)
+    with open(os.path.join(d, "layout"), "w") as f:
+        f.write(f"{ITEM_H + ITEM_GAP} {FRAME} {INNER - ITEM_GAP} {ITEM_GAP} {2 * CHAR} {ITEMS[0]} {ITEMS[-1]}\n")
+    with open(os.path.join(d, "font"), "w") as f:
+        f.write(f"{FONT_SRC} {FONT_SIZE}\n")
 
 
 def dunst():
