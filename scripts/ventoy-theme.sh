@@ -15,6 +15,7 @@ alias_of() {
 	case $b in
 	archlinux*) echo "arch linux" ;;
 	win11*) echo "windows 11" ;;
+	tiny11*) echo "tiny11" ;;
 	win10*) echo "windows 10" ;;
 	*) echo "${b//[_-]/ }" ;;
 	esac
