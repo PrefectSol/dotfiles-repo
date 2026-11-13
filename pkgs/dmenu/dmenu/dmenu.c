@@ -545,6 +545,14 @@ keypress(XKeyEvent *ev)
 		cleanup();
 		exit(1);
 	}
+	if (delcmd && ev->state & ControlMask && (ksym == XK_Delete || ksym == XK_KP_Delete)) {
+		if (ev->state & ShiftMask) {
+			cleanup();
+			exit(11);
+		}
+		removesel();
+		goto draw;
+	}
 	len = XmbLookupString(xic, ev, buf, sizeof buf, &ksym, &status);
 	switch (status) {
 	default: /* XLookupNone, XBufferOverflow */
@@ -556,14 +564,6 @@ keypress(XKeyEvent *ev)
 		break;
 	}
 
-	if (delcmd && ev->state & ControlMask && (ksym == XK_Delete || ksym == XK_KP_Delete)) {
-		if (ev->state & ShiftMask) {
-			cleanup();
-			exit(11);
-		}
-		removesel();
-		goto draw;
-	}
 	if (ev->state & ControlMask) {
 		switch(ksym) {
 		case XK_a: ksym = XK_Home;      break;
@@ -908,6 +908,7 @@ setup(void)
 		y = topbar ? gap : wa.height - mh - gap - 2 * border;
 		mw = wa.width - 2 * gap - 2 * border;
 	}
+	mw = MIN(mw, maxwidth);
 	promptw = (prompt && *prompt) ? MAX(TEXTW(prompt), (int)(promptchars * drw_fontset_getwidth(drw, "0")) + lrpad) : 0;
 	inputw = mw / 3; /* input width: ~33% of monitor width */
 	match();

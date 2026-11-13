@@ -5,4 +5,4 @@ Xft.hintstyle: hintslight
 Xft.rgba: none
 Xft.lcdfilter: lcddefault
 Xcursor.theme: Vimix-cursors
-Xcursor.size: 24
+Xcursor.size: 30

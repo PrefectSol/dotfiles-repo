@@ -10,6 +10,7 @@ static const char *prompt      = NULL;      /* -p  option; prompt to the left of
 static const int barpad        = 10;
 static const int gap           = 5;
 static const int border        = 2;
+static const int maxwidth      = 1280;
 static const int promptchars   = 9;
 static const float previewfrac = 0.4;
 #include "colors.h"

@@ -1,6 +1,6 @@
 pkgname=dmenu
 pkgver=5.4
-pkgrel=15
+pkgrel=18
 pkgdesc='Dynamic menu'
 arch=(x86_64)
 url=https://tools.suckless.org/dmenu

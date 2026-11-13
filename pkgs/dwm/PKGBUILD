@@ -1,6 +1,6 @@
 pkgname=dwm
 pkgver=6.8
-pkgrel=22
+pkgrel=23
 pkgdesc='Dynamic window manager'
 arch=(x86_64)
 url=https://dwm.suckless.org

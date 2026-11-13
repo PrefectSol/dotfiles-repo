@@ -33,7 +33,6 @@
 #include <X11/cursorfont.h>
 #include <X11/keysym.h>
 #include <X11/Xatom.h>
-#include <X11/XKBlib.h>
 #include <X11/Xlib.h>
 #include <X11/Xproto.h>
 #include <X11/Xutil.h>
@@ -180,7 +179,6 @@ static void grabbuttons(Client *c, int focused);
 static void grabkeys(void);
 static int intree(Client *c, Monitor *m);
 static void keypress(XEvent *e);
-static void keyrelease(XEvent *e);
 static void killclient(const Arg *arg);
 static Node *leafof(Node *n, Client *c);
 static void manage(Window w, XWindowAttributes *wa);
@@ -270,7 +268,6 @@ static void (*handler[LASTEvent]) (XEvent *) = {
 	[Expose] = expose,
 	[FocusIn] = focusin,
 	[KeyPress] = keypress,
-	[KeyRelease] = keyrelease,
 	[MappingNotify] = mappingnotify,
 	[MapNotify] = mapnotify,
 	[MapRequest] = maprequest,
@@ -280,7 +277,6 @@ static void (*handler[LASTEvent]) (XEvent *) = {
 };
 static Atom wmatom[WMLast], netatom[NetLast];
 static int running = 1;
-static int combo = 0;
 static Window popup;
 static Cur *cursor[CurLast];
 static Clr **scheme;
@@ -571,17 +567,23 @@ clientat(int x, int y, Client *skip)
 void
 comboview(const Arg *arg)
 {
-	unsigned int newtags = arg->ui & TAGMASK;
+	unsigned int held = arg->ui & TAGMASK, *cur = &selmon->tagset[selmon->seltags];
+	char km[32];
+	size_t i;
+	KeyCode kc;
 
-	if (combo)
-		selmon->tagset[selmon->seltags] |= newtags;
-	else {
-		combo = 1;
-		if (newtags == selmon->tagset[selmon->seltags])
-			return;
+	XQueryKeymap(dpy, km);
+	for (i = 0; i < LENGTH(keys); i++)
+		if (keys[i].func == comboview && (kc = XKeysymToKeycode(dpy, keys[i].keysym))
+		&& km[kc / 8] & 1 << kc % 8)
+			held |= keys[i].arg.ui & TAGMASK;
+	if (held == *cur)
+		return;
+	if (held == (arg->ui & TAGMASK)) {
 		selmon->seltags ^= 1;
-		selmon->tagset[selmon->seltags] = newtags;
-	}
+		selmon->tagset[selmon->seltags] = held;
+	} else
+		*cur = held;
 	focus(NULL);
 	arrange(selmon);
 }
@@ -1145,21 +1147,6 @@ keypress(XEvent *e)
 		&& CLEANMASK(keys[i].mod) == CLEANMASK(ev->state)
 		&& keys[i].func)
 			keys[i].func(&(keys[i].arg));
-}
-
-void
-keyrelease(XEvent *e)
-{
-	char km[32];
-	size_t i;
-	KeyCode kc;
-
-	XQueryKeymap(dpy, km);
-	for (i = 0; i < LENGTH(keys); i++)
-		if (keys[i].func == comboview && (kc = XKeysymToKeycode(dpy, keys[i].keysym))
-		&& km[kc / 8] & 1 << kc % 8)
-			return;
-	combo = 0;
 }
 
 void
@@ -2139,7 +2126,6 @@ setup(void)
 		|LeaveWindowMask|StructureNotifyMask|PropertyChangeMask;
 	XChangeWindowAttributes(dpy, root, CWEventMask|CWCursor, &wa);
 	XSelectInput(dpy, root, wa.event_mask);
-	XkbSetDetectableAutoRepeat(dpy, True, NULL);
 	grabkeys();
 	focus(NULL);
 }

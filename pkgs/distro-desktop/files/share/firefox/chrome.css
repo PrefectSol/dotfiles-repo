@@ -5,7 +5,7 @@
 		--d-hover: #1d1e27;
 		--d-sel: #2d2f3b;
 		--d-fg: #c8d3f5;
-		--d-dim: #7c8094;
+		--d-dim: #a6b0d8;
 		--d-acc: #82aaff;
 		--d-side: clamp(150px, 15%, 240px);
 		--border-radius-small: 0px !important;
@@ -171,7 +171,7 @@
 	#tabbrowser-tabs .tabbrowser-tab {
 		padding: 0 !important;
 		margin: 0 !important;
-		min-height: 32px !important;
+		min-height: 36px !important;
 	}
 	.tabbrowser-tab .tab-background {
 		margin: 0 !important;
@@ -188,13 +188,13 @@
 		box-shadow: inset 2px 0 0 var(--d-acc) !important;
 	}
 	.tabbrowser-tab .tab-content {
-		min-height: 32px !important;
+		min-height: 36px !important;
 		padding-inline: 14px 8px !important;
 		gap: 10px !important;
 	}
 	.tabbrowser-tab .tab-label {
 		font-family: monospace !important;
-		font-size: 13px !important;
+		font-size: 15px !important;
 		color: var(--d-dim) !important;
 	}
 	.tabbrowser-tab:hover .tab-label {
@@ -219,7 +219,7 @@
 	#tabs-newtab-button, #vertical-tabs-newtab-button {
 		margin: 0 !important;
 		padding: 0 !important;
-		min-height: 32px !important;
+		min-height: 36px !important;
 		border-radius: 0 !important;
 	}
 	#tabs-newtab-button > .toolbarbutton-icon, #vertical-tabs-newtab-button > .toolbarbutton-icon {
@@ -231,7 +231,7 @@
 		opacity: 0.6;
 	}
 	#tabs-newtab-button > .toolbarbutton-text, #vertical-tabs-newtab-button > .toolbarbutton-text {
-		font: 13px monospace !important;
+		font: 15px monospace !important;
 		color: var(--d-dim) !important;
 	}
 	#tabs-newtab-button:hover, #vertical-tabs-newtab-button:hover {
