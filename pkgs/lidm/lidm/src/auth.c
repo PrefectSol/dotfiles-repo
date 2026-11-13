@@ -156,7 +156,8 @@ static void start_xorg_server(struct passwd* pw, char** NNULLABLE envlist,
     _exit(EXIT_FAILURE);
   }
 
-  int exit = execle(xorg_path, xorg_path, "-displayfd", fd_str, "-noreset", vt_path, NULL,
+  int exit = execle(xorg_path, xorg_path, "-displayfd", fd_str, "-noreset", "-ardelay", "200",
+                    "-arinterval", "33", vt_path, NULL,
                     envlist);
   perror("exec");
 

@@ -10,13 +10,17 @@ share=/usr/share/distro
 xrdb -merge "$share/Xresources"
 [[ -f $HOME/.Xresources ]] && xrdb -merge "$HOME/.Xresources"
 xset s off -dpms
-xset r rate 200 30
+setxkbmap $(setxkbmap -query | awk '$1 == "layout:" { print "-layout", $2 } $1 == "options:" { print "-option", $2 }')
 xsetroot -cursor_name left_ptr
 [[ -x $HOME/.config/distro/monitors ]] && "$HOME/.config/distro/monitors"
 distro-wallpaper
 
 dbus-update-activation-environment --systemd DISPLAY XAUTHORITY XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XCURSOR_THEME XCURSOR_SIZE QT_QPA_PLATFORMTHEME
 
+if [[ -e /proc/driver/nvidia/version ]]; then
+	primary=$(xrandr --query | awk '/ primary/ { print $1; exit }')
+	[[ -n $primary ]] && export __GL_SYNC_DISPLAY_DEVICE=$primary
+fi
 picom_args=(--config "$share/picom.conf")
 systemd-detect-virt -q && picom_args+=(--backend xrender)
 picom "${picom_args[@]}" &

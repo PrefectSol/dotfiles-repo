@@ -33,6 +33,7 @@
 #include <X11/cursorfont.h>
 #include <X11/keysym.h>
 #include <X11/Xatom.h>
+#include <X11/XKBlib.h>
 #include <X11/Xlib.h>
 #include <X11/Xproto.h>
 #include <X11/Xutil.h>
@@ -62,7 +63,7 @@ enum { CurNormal, CurMove, CurN, CurS, CurW, CurE, CurNW, CurNE, CurSW, CurSE, C
 enum { SchemeNorm, SchemeSel, SchemeDim, SchemeSep, SchemeUrg }; /* color schemes */
 enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
        NetWMFullscreen, NetActiveWindow, NetWMWindowType,
-       NetWMWindowTypeDialog, NetClientList, DwmClient, DwmTrees, DwmBlocks, NetLast }; /* EWMH atoms */
+       NetWMWindowTypeDialog, NetClientList, DwmClient, DwmState, DwmTrees, DwmBlocks, NetLast }; /* EWMH atoms */
 enum { WMProtocols, WMDelete, WMState, WMTakeFocus, WMLast }; /* default atoms */
 enum { ClkTagBar, ClkLtSymbol, ClkStatusText, ClkWinTitle,
        ClkClientWin, ClkRootWin, ClkLast }; /* clicks */
@@ -94,6 +95,7 @@ struct Client {
 	int bw, oldbw;
 	unsigned int tags;
 	int isfixed, isfloating, isurgent, neverfocus, oldstate, isfullscreen;
+	int spos;
 	Client *next;
 	Client *snext;
 	Monitor *mon;
@@ -1148,6 +1150,15 @@ keypress(XEvent *e)
 void
 keyrelease(XEvent *e)
 {
+	char km[32];
+	size_t i;
+	KeyCode kc;
+
+	XQueryKeymap(dpy, km);
+	for (i = 0; i < LENGTH(keys); i++)
+		if (keys[i].func == comboview && (kc = XKeysymToKeycode(dpy, keys[i].keysym))
+		&& km[kc / 8] & 1 << kc % 8)
+			return;
 	combo = 0;
 }
 
@@ -1186,12 +1197,13 @@ manage(Window w, XWindowAttributes *wa)
 	Window trans = None;
 	XWindowChanges wc;
 	Monitor *m;
-	long *p = NULL;
-	int di;
+	long *p = NULL, st[6] = { 0 };
+	int di, saved = 0;
 	unsigned long n, dl;
 	Atom da;
 
 	c = ecalloc(1, sizeof(Client));
+	c->spos = -1;
 	c->win = w;
 	c->x = c->oldx = wa->x;
 	c->y = c->oldy = wa->y;
@@ -1216,6 +1228,13 @@ manage(Window w, XWindowAttributes *wa)
 		}
 		XFree(p);
 	}
+	p = NULL;
+	if (XGetWindowProperty(dpy, w, netatom[DwmState], 0L, 6L, True, XA_CARDINAL,
+		&da, &di, &n, &dl, (unsigned char **)&p) == Success && p) {
+		if ((saved = n == 6))
+			memcpy(st, p, sizeof st);
+		XFree(p);
+	}
 	c->bw = borderpx;
 
 	wc.border_width = c->bw;
@@ -1228,8 +1247,16 @@ manage(Window w, XWindowAttributes *wa)
 	XSelectInput(dpy, w, EnterWindowMask|FocusChangeMask|PropertyChangeMask|StructureNotifyMask);
 	grabbuttons(c, 0);
 	if (!c->isfloating)
-		c->isfloating = c->oldstate = trans != None || c->isfixed;
-	if (!c->isfullscreen && (c->isfloating || !LT(c->mon)->arrange)) {
+		c->isfloating = c->oldstate = trans != None || c->isfixed || (saved && st[0] & 1);
+	if (saved) {
+		c->spos = st[5];
+		if (!c->isfullscreen && !(st[0] & 2)) {
+			c->x = st[1];
+			c->y = st[2];
+			c->w = st[3];
+			c->h = st[4];
+		}
+	} else if (!c->isfullscreen && (c->isfloating || !LT(c->mon)->arrange)) {
 		if (!c->isfloating)
 			floatsize(c);
 		centerclient(c);
@@ -1741,6 +1768,7 @@ restoretrees(void)
 	char *text = NULL, *line, *tok, *ltok, *t;
 	Monitor *m;
 	XTextProperty tp;
+	XEvent ev;
 	unsigned int v;
 
 	if (!XGetTextProperty(dpy, root, &tp, netatom[DwmTrees]) || !tp.nitems)
@@ -1754,7 +1782,9 @@ restoretrees(void)
 		for (m = mons; m && m->num != atoi(t + 1); m = m->next);
 		if (!m)
 			continue;
-		if (*t == 'm') {
+		if (*t == 's')
+			selmon = m;
+		else if (*t == 'm') {
 			unsigned int ts = (t = strtok_r(NULL, " ", &tok)) ? strtoul(t, NULL, 10) & TAGMASK : 0;
 			unsigned int fl = (t = strtok_r(NULL, " ", &tok)) ? strtoul(t, NULL, 10) : 0;
 			if (ts)
@@ -1767,8 +1797,23 @@ restoretrees(void)
 		}
 	}
 	free(text);
+	for (m = mons; m; m = m->next) {
+		Client *c, *d, *sorted = NULL, **pp;
+
+		while ((c = m->stack)) {
+			m->stack = c->snext;
+			for (pp = &sorted; (d = *pp) && (unsigned int)d->spos <= (unsigned int)c->spos; pp = &d->snext);
+			c->snext = d;
+			*pp = c;
+		}
+		m->stack = sorted;
+		for (c = m->stack; c && !ISVISIBLE(c); c = c->snext);
+		m->sel = c;
+	}
 	focus(NULL);
 	arrange(NULL);
+	XSync(dpy, False);
+	while (XCheckMaskEvent(dpy, EnterWindowMask, &ev));
 }
 
 static void
@@ -1792,7 +1837,21 @@ savetrees(void)
 	size_t len = 0;
 	unsigned int v, fl;
 	Monitor *m;
+	Client *c;
+	long st[6];
 
+	for (m = mons; m; m = m->next)
+		for (v = 0, c = m->stack; c; c = c->snext, v++) {
+			st[0] = (c->isfullscreen ? c->oldstate : c->isfloating) | c->isfullscreen << 1;
+			st[1] = c->x;
+			st[2] = c->y;
+			st[3] = c->w;
+			st[4] = c->h;
+			st[5] = v;
+			XChangeProperty(dpy, c->win, netatom[DwmState], XA_CARDINAL, 32,
+				PropModeReplace, (unsigned char *)st, 6);
+		}
+	len += snprintf(buf, sizeof buf, "s%d;", selmon->num);
 	for (m = mons; m && len < sizeof buf; m = m->next) {
 		for (fl = v = 0; v <= LENGTH(tags); v++)
 			fl |= (m->lt[v] == &layouts[1]) << v;
@@ -2040,6 +2099,7 @@ setup(void)
 	netatom[NetWMWindowTypeDialog] = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DIALOG", False);
 	netatom[NetClientList] = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
 	netatom[DwmClient] = XInternAtom(dpy, "_DWM_CLIENT", False);
+	netatom[DwmState] = XInternAtom(dpy, "_DWM_STATE", False);
 	netatom[DwmTrees] = XInternAtom(dpy, "_DWM_TREES", False);
 	netatom[DwmBlocks] = XInternAtom(dpy, "_DWM_BLOCKS", False);
 	/* init cursors */
@@ -2079,6 +2139,7 @@ setup(void)
 		|LeaveWindowMask|StructureNotifyMask|PropertyChangeMask;
 	XChangeWindowAttributes(dpy, root, CWEventMask|CWCursor, &wa);
 	XSelectInput(dpy, root, wa.event_mask);
+	XkbSetDetectableAutoRepeat(dpy, True, NULL);
 	grabkeys();
 	focus(NULL);
 }

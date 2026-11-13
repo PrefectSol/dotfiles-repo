@@ -1,0 +1,20 @@
+pkgname=vimix-cursors
+pkgver=r16.9bc292f
+pkgrel=1
+pkgdesc='Vimix cursor theme'
+arch=(any)
+url=https://github.com/vinceliuice/Vimix-cursors
+license=(GPL-3.0-or-later)
+makedepends=(git)
+source=("vimix::git+https://github.com/vinceliuice/vimix-cursors.git#commit=9bc292f40904e0a33780eda5c5d92eb9a1154e9c")
+sha256sums=(SKIP)
+
+pkgver() {
+  cd vimix
+  printf 'r%s.%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+package() {
+  install -d "$pkgdir/usr/share/icons"
+  cp -r vimix/dist "$pkgdir/usr/share/icons/Vimix-cursors"
+}

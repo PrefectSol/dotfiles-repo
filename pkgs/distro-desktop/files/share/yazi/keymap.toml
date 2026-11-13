@@ -64,7 +64,7 @@ prepend_keymap = [
 	{ on = [ "б", "к" ], run = "sort random --reverse=no" },
 	{ on = [ "п", "р" ], run = "cd ~" },
 	{ on = [ "п", "с" ], run = "cd ~/.config" },
-	{ on = [ "п", "в" ], run = "cd ~/Downloads" },
+	{ on = [ "п", "в" ], run = "cd ~/downloads" },
 	{ on = [ "п", "е" ], run = "plugin trash" },
 	{ on = [ "п", "а" ], run = "follow" },
 	{ on = [ "е", "е" ], run = "tab_create --current" },

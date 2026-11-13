@@ -1,12 +1,13 @@
 @-moz-document url(chrome://browser/content/browser.xhtml) {
 	:root {
-		--d-bg: #1e2030;
-		--d-page: rgba(34, 36, 54, 0.8);
-		--d-hover: #262a40;
-		--d-sel: #2f334d;
+		--d-bg: #15161e;
+		--d-page: rgba(21, 22, 30, 0.8);
+		--d-hover: #1d1e27;
+		--d-sel: #2d2f3b;
 		--d-fg: #c8d3f5;
-		--d-dim: #828bb8;
+		--d-dim: #7c8094;
 		--d-acc: #82aaff;
+		--d-side: clamp(150px, 15%, 240px);
 		--border-radius-small: 0px !important;
 		--border-radius-medium: 0px !important;
 		--border-radius-large: 0px !important;
@@ -81,16 +82,16 @@
 	#firefox-view-button, #alltabs-button, #sidebar-button, #fxa-toolbar-menu-button, #new-tab-button,
 	#reset-pbm-toolbar-button, #smartwindow-group-tabs-button, #ai-window-toggle, #vertical-spacer,
 	#star-button-box, #pageActionButton, #reader-mode-button, #picture-in-picture-button,
-	#translations-button, #urlbar-zoom-button, #tracking-protection-icon-container,
-	#identity-permission-box, #identity-icon-label, #trust-label, .searchmode-switcher, .urlbar-page-action,
-	.buttons-wrapper, #sidebar-tools-and-extensions-splitter, .tab-audio-button, .tab-secondary-label {
+	#translations-button, #tracking-protection-icon-container,
+	#identity-icon-label, #trust-label, .searchmode-switcher, .urlbar-page-action,
+	#sidebar-tools-and-extensions-splitter, .tab-secondary-label {
 		display: none !important;
 	}
 
 	#sidebar-container {
-		width: 240px !important;
-		min-width: 240px !important;
-		max-width: 240px !important;
+		width: var(--d-side) !important;
+		min-width: var(--d-side) !important;
+		max-width: var(--d-side) !important;
 	}
 	#nav-bar {
 		position: relative !important;
@@ -105,8 +106,8 @@
 	#urlbar-container {
 		position: absolute !important;
 		inset-block: 0 !important;
-		inset-inline-start: max(249px, calc(50% + 120px - 400px)) !important;
-		inset-inline-end: max(120px, calc(50% - 120px - 400px)) !important;
+		inset-inline-start: max(calc(var(--d-side) + 9px), calc(50% + var(--d-side) / 2 - 400px)) !important;
+		inset-inline-end: max(120px, calc(50% - var(--d-side) / 2 - 400px)) !important;
 		width: auto !important;
 		max-width: none !important;
 		min-width: 0 !important;

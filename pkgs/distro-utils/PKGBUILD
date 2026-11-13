@@ -1,10 +1,10 @@
 pkgname=distro-utils
 pkgver=0.1
-pkgrel=8
+pkgrel=9
 pkgdesc='Small X11 helpers for the desktop'
 arch=(x86_64)
 license=(MIT)
-depends=(libx11)
+depends=(libx11 libxfixes)
 
 prepare() {
   rm -rf utils

@@ -1,5 +1,6 @@
 #!/bin/bash
 dir=${XDG_DATA_HOME:-$HOME/.local/share}/distro/clipboard
+meta=$dir/.meta
 
 restore() {
 	local path=$1 tmp u
@@ -20,39 +21,73 @@ restore() {
 	esac
 }
 
-if [[ $1 == restore ]]; then
-	[[ -f $2 ]] && restore "$2"
-	exit 0
-fi
-[[ -d $dir ]] || exit 0
-lines=()
-while IFS= read -r f; do
-	path=$dir/$f
-	ts=$(date -r "$path" '+%H:%M')
-	case $f in
+label() {
+	local path=$1 n text first size
+	case $path in
 	*.txt)
 		n=$(grep -c '' "$path")
 		text=$(head -c 400 "$path" | tr '\n\t' '  ' | tr -s ' ' | cut -c1-110)
 		((n > 1)) && text+="  [$n lines]"
-		label="$ts  $text"
+		echo "$text"
 		;;
 	*.uri)
 		first=$(head -1 "$path")
 		first=${first#file://}
 		first=$(printf '%b' "${first//%/\\x}")
 		n=$(grep -c '' "$path")
-		label="$ts  [files] ${first##*/}"
-		((n > 1)) && label+=" +$((n - 1))"
+		text="[files] ${first##*/}"
+		((n > 1)) && text+=" +$((n - 1))"
+		echo "$text"
 		;;
 	*)
 		size=$(file -b "$path" | grep -oE '[0-9]+ ?x ?[0-9]+' | head -1 | tr -d ' ')
-		label="$ts  [img ${size:-?}]"
+		echo "[img ${size:-?}]"
 		;;
 	esac
-	lines+=("$label"$'\t'"$path")
-done < <(ls -1t "$dir")
+}
+
+clear() {
+	rm -rf "$dir"/* "$meta"
+	xclip -selection clipboard -i /dev/null
+}
+
+case $1 in
+restore)
+	[[ -f $2 ]] && restore "$2"
+	exit 0
+	;;
+label)
+	mkdir -p "$meta"
+	label "$2" >"$meta/${2##*/}"
+	exit 0
+	;;
+clear)
+	clear
+	exit 0
+	;;
+rm)
+	[[ $2 == "$dir"/* ]] && rm -f "$2" "$meta/${2##*/}"
+	exit 0
+	;;
+esac
+[[ -d $dir ]] || exit 0
+lines=()
+while read -r ts path; do
+	f=${path##*/}
+	[[ -f $meta/$f ]] || "$0" label "$path"
+	printf -v t '%(%H:%M)T' "${ts%.*}"
+	lines+=("$t  $(<"$meta/$f")"$'\t'"$path")
+done < <(stat -c '%Y %n' "$dir"/* 2>/dev/null | sort -rn)
 ((${#lines[@]})) || exit 0
-chosen=$(printf '%s\n' "${lines[@]}" | dmenu -P -l 8 -p clipboard "$@") || exit 0
+chosen=$(printf '%s\n' "${lines[@]}" | dmenu -P -l 8 -p clipboard -K v -d 'distro-clip rm "$1"' "$@")
+case $? in
+0) ;;
+11)
+	clear
+	exit 0
+	;;
+*) exit 0 ;;
+esac
 path=${chosen##*$'\t'}
 [[ $chosen == *$'\t'* && -f $path ]] || exit 0
 restore "$path"

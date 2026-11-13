@@ -42,12 +42,8 @@ set)
 		[[ $(version "$d") == "$v" || $(version "$d") == "$v".* ]] && { target=$d; break; }
 	done
 	[[ -n $target ]] || { echo "cuda $v is not installed, see: cuda-switch list" >&2; exit 1; }
-	if [[ $target == /opt/cuda ]]; then
-		rm -f "$link"
-	else
-		mkdir -p "${link%/*}"
-		ln -sfn "$target" "$link"
-	fi
+	mkdir -p "${link%/*}"
+	ln -sfn "$target" "$link"
 	echo "cuda $(version "$target") ($target)"
 	;;
 *)

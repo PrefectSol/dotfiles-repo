@@ -9,27 +9,40 @@ fi
 mkdir -p "$dir"
 chmod 700 "$dir"
 newest=$(ls -1t "$dir" | head -1)
-[[ -n $newest ]] && distro-clip restore "$dir/$newest"
-
 last=
+file=
+if [[ -n $newest ]]; then
+	last=${newest%.*}
+	file=$dir/$newest
+	distro-clip restore "$file"
+fi
+
 store() {
-	local tmp=$1 ext=$2 sum
+	local tmp=$1 ext=$2 sum old
 	sum=$(sha1sum "$tmp" | cut -c1-16)
 	if [[ $sum == "$last" ]]; then
 		rm -f "$tmp"
 		return
 	fi
 	last=$sum
+	file=$dir/$sum.$ext
 	if [[ -e $dir/$sum.$ext ]]; then
 		rm -f "$tmp"
 		touch "$dir/$sum.$ext"
 	else
 		mv "$tmp" "$dir/$sum.$ext"
+		distro-clip label "$dir/$sum.$ext"
 	fi
-	ls -1t "$dir" | tail -n +$((max + 1)) | sed "s|^|$dir/|" | xargs -r rm -f
+	ls -1t "$dir" | tail -n +$((max + 1)) | while IFS= read -r old; do
+		rm -f "$dir/$old" "$dir/.meta/$old"
+	done
 }
 
-while clipnotify; do
+distro-clipwatch | while read -r event; do
+	if [[ $event == gone ]]; then
+		[[ -f $file ]] && distro-clip restore "$file"
+		continue
+	fi
 	targets=$(xclip -selection clipboard -t TARGETS -o 2>/dev/null) || continue
 	tmp=$(mktemp "$dir/.XXXXXX")
 	if grep -qx 'text/uri-list' <<<"$targets"; then

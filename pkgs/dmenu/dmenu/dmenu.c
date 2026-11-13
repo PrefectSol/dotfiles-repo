@@ -9,6 +9,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <wctype.h>
+#include <sys/wait.h>
 
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
@@ -17,6 +18,7 @@
 #include <X11/extensions/Xinerama.h>
 #endif
 #include <X11/Xft/Xft.h>
+#include <X11/extensions/XTest.h>
 #include <Imlib2.h>
 
 #include "drw.h"
@@ -34,7 +36,7 @@ struct item {
 	char *text;
 	struct item *left, *right;
 	char *path;
-	int out, idx;
+	int out, idx, gone;
 	double dist;
 };
 
@@ -48,6 +50,8 @@ static struct item *items = NULL;
 static struct item *matches, *matchend;
 static struct item *prev, *curr, *next, *sel;
 static int mon = -1, screen, preview;
+static KeySym togglekey = NoSymbol;
+static const char *delcmd;
 
 static Atom clip, utf8;
 static Display *dpy;
@@ -282,14 +286,14 @@ drawpreview(int x, int y, int w, int h)
 	int pad = lrpad / 2;
 
 	drw_setscheme(drw, scheme[SchemeSep]);
-	drw_rect(drw, x, y + pad / 2, 1, h - bh - pad / 2 * 2, 1, 0);
+	drw_rect(drw, x, y, 1, h, 1, 0);
 	if (!sel || !sel->path)
 		return;
 	ext = strrchr(sel->path, '.');
 	if (ext && (!strcmp(ext, ".png") || !strcmp(ext, ".jpg") || !strcmp(ext, ".jpeg")))
-		drawimage(sel->path, x + 1 + pad, y + pad, w - 1 - 2 * pad, h - bh - 2 * pad);
+		drawimage(sel->path, x + 1 + pad, y + pad, w - 1 - 2 * pad, h - 2 * pad);
 	else
-		drawtextfile(sel->path, x + 1 + pad, y, w - 1 - 2 * pad, h - bh);
+		drawtextfile(sel->path, x + 1 + pad, y, w - 1 - 2 * pad, h);
 }
 
 static void
@@ -400,6 +404,8 @@ match(void)
 
 	matches = matchend = NULL;
 	for (item = items; item && item->text; item++) {
+		if (item->gone)
+			continue;
 		if (!*text) {
 			appenditem(item, &matches, &matchend);
 			continue;
@@ -462,6 +468,62 @@ movewordedge(int dir)
 }
 
 static void
+passkey(XKeyEvent *ev)
+{
+	XUngrabKeyboard(dpy, CurrentTime);
+	XTestFakeKeyEvent(dpy, ev->keycode, False, CurrentTime);
+	XTestFakeKeyEvent(dpy, ev->keycode, True, CurrentTime);
+	XSync(dpy, False);
+}
+
+static void
+regrab(void)
+{
+	struct timespec ts = { .tv_sec = 0, .tv_nsec = 1000000 };
+	int i;
+
+	for (i = 0; i < 10000; i++) {
+		if (XGrabKeyboard(dpy, DefaultRootWindow(dpy), True, GrabModeAsync,
+		                  GrabModeAsync, CurrentTime) == GrabSuccess)
+			return;
+		nanosleep(&ts, NULL);
+	}
+	cleanup();
+	exit(1);
+}
+
+static void
+removesel(void)
+{
+	struct item *it;
+	pid_t pid;
+	int pos = 0;
+
+	if (!sel)
+		return;
+	if (sel->path && (pid = fork()) == 0) {
+		execl("/bin/sh", "sh", "-c", delcmd, "sh", sel->path, (char *)NULL);
+		_exit(127);
+	} else if (sel->path && pid > 0)
+		waitpid(pid, NULL, 0);
+	for (it = matches; it && it != sel; it = it->right)
+		pos++;
+	sel->gone = 1;
+	match();
+	if (!matches) {
+		cleanup();
+		exit(1);
+	}
+	for (sel = matches; pos > 0 && sel->right; pos--) {
+		sel = sel->right;
+		if (sel == next) {
+			curr = next;
+			calcoffsets();
+		}
+	}
+}
+
+static void
 keypress(XKeyEvent *ev)
 {
 	char buf[64];
@@ -469,6 +531,20 @@ keypress(XKeyEvent *ev)
 	KeySym ksym = NoSymbol;
 	Status status;
 
+	ksym = XLookupKeysym(ev, 0);
+	if ((ksym >= 0x1008ff00 && ksym <= 0x1008ffff) || (ev->state & Mod4Mask && ksym >= XK_F1 && ksym <= XK_F12)) {
+		passkey(ev);
+		regrab();
+		return;
+	}
+	if (ev->state & Mod4Mask) {
+		if (IsModifierKey(ksym))
+			return;
+		if (ksym != togglekey)
+			passkey(ev);
+		cleanup();
+		exit(1);
+	}
 	len = XmbLookupString(xic, ev, buf, sizeof buf, &ksym, &status);
 	switch (status) {
 	default: /* XLookupNone, XBufferOverflow */
@@ -480,6 +556,14 @@ keypress(XKeyEvent *ev)
 		break;
 	}
 
+	if (delcmd && ev->state & ControlMask && (ksym == XK_Delete || ksym == XK_KP_Delete)) {
+		if (ev->state & ShiftMask) {
+			cleanup();
+			exit(11);
+		}
+		removesel();
+		goto draw;
+	}
 	if (ev->state & ControlMask) {
 		switch(ksym) {
 		case XK_a: ksym = XK_Home;      break;
@@ -710,7 +794,7 @@ readstdin(void)
 		items[i].path = NULL;
 		if (preview && (items[i].path = strchr(items[i].text, '\t')))
 			*items[i].path++ = '\0';
-		items[i].out = 0;
+		items[i].out = items[i].gone = 0;
 	}
 	free(line);
 	if (items)
@@ -868,7 +952,8 @@ static void
 usage(void)
 {
 	die("usage: dmenu [-bfiPv] [-l lines] [-p prompt] [-fn font] [-m monitor]\n"
-	    "             [-nb color] [-nf color] [-sb color] [-sf color] [-w windowid]");
+	    "             [-nb color] [-nf color] [-sb color] [-sf color] [-w windowid]\n"
+	    "             [-K togglekey] [-d deletecmd]");
 }
 
 int
@@ -911,6 +996,10 @@ main(int argc, char *argv[])
 			colors[SchemeSel][ColFg] = argv[++i];
 		else if (!strcmp(argv[i], "-w"))   /* embedding window id */
 			embed = argv[++i];
+		else if (!strcmp(argv[i], "-K"))
+			togglekey = XStringToKeysym(argv[++i]);
+		else if (!strcmp(argv[i], "-d"))
+			delcmd = argv[++i];
 		else
 			usage();
 

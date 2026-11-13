@@ -1,5 +1,5 @@
 title-text: ""
-desktop-color: "#222436"
+desktop-color: "#15161e"
 terminal-font: "Mono Regular 32"
 terminal-left: "0"
 terminal-top: "0"
@@ -9,17 +9,17 @@ terminal-border: "0"
 
 + image {
   left = 50%-390
-  top = 50%-180
+  top = 50%-@HALF@
   width = 780
-  height = 360
+  height = @BOX_H@
   file = "frame.png"
 }
 
 + boot_menu {
   left = 50%-358
-  top = 50%-144
+  top = 50%-@MENU_TOP@
   width = 716
-  height = 288
+  height = @MENU_H@
   item_font = "Mono Regular 32"
   item_color = "#c8d3f5"
   selected_item_color = "#e0e6ff"
@@ -35,12 +35,12 @@ terminal-border: "0"
 
 + label {
   left = 50%-390
-  top = 50%+218
+  top = 50%+@LABEL_TOP@
   width = 780
   align = "center"
   id = "__timeout__"
   text = "booting in %d seconds"
-  color = "#636da6"
+  color = "#6c6f7a"
   font = "Mono Regular 32"
 }
 

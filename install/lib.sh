@@ -11,6 +11,8 @@ tune_pacman() {
 }
 
 REPO_NAME=distro
+YAY_COMMIT=a2812a593d4017a657bbedf98761db78072b5e4c
+MINIFORGE_VERSION=26.9.4-2
 
 add_local_repo() {
 	local f=$1 dir=$2
@@ -32,35 +34,40 @@ gen_locales() {
 	locale-gen
 }
 
-install_cursor() {
-	local tmp
-	tmp=$(mktemp -d)
-	git clone -q --depth 1 https://github.com/vinceliuice/vimix-cursors.git "$tmp/cursors"
-	rm -rf /usr/share/icons/Vimix-cursors
-	cp -r "$tmp/cursors/dist" /usr/share/icons/Vimix-cursors
-	rm -rf "$tmp"
+retry() {
+	local i
+	for i in 1 2 3; do
+		"$@" && return
+		log "failed, retry $i/3: $*"
+		sleep 5
+	done
+	return 1
 }
 
 install_yay() {
 	local user=$1 tmp
 	command -v yay >/dev/null && return
 	tmp=$(sudo -u "$user" mktemp -d)
-	sudo -u "$user" bash -c "git clone -q https://aur.archlinux.org/yay-bin.git $tmp/yay && cd $tmp/yay && makepkg -si --noconfirm"
+	retry sudo -u "$user" bash -c "rm -rf $tmp/yay && git clone -q https://aur.archlinux.org/yay-bin.git $tmp/yay && cd $tmp/yay && git checkout -q $YAY_COMMIT && makepkg -si --noconfirm"
 	rm -rf "$tmp"
 }
 
 install_miniforge() {
 	local user=$1
 	[[ -d /opt/conda ]] && return
-	curl -fsSL -o /tmp/miniforge.sh https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
+	local url=https://github.com/conda-forge/miniforge/releases/download/$MINIFORGE_VERSION/Miniforge3-$MINIFORGE_VERSION-Linux-x86_64.sh
+	retry curl -fsSL -o /tmp/miniforge.sh "$url"
+	retry curl -fsSL -o /tmp/miniforge.sha256 "$url.sha256"
+	[[ $(sha256sum /tmp/miniforge.sh | cut -d' ' -f1) == $(cut -d' ' -f1 /tmp/miniforge.sha256) ]] || die "miniforge checksum mismatch"
 	bash /tmp/miniforge.sh -b -p /opt/conda
-	rm -f /tmp/miniforge.sh
+	rm -f /tmp/miniforge.sh /tmp/miniforge.sha256
 	printf 'auto_activate_base: false\nchangeps1: false\n' > /opt/conda/.condarc
 	chown -R "$user:$user" /opt/conda
 }
 
 enable_services() {
-	systemctl enable NetworkManager systemd-timesyncd fstrim.timer reflector.timer paccache.timer vtrgb
+	systemctl enable NetworkManager systemd-timesyncd fstrim.timer reflector.timer paccache.timer vtrgb earlyoom
+	systemctl --global enable ssh-agent.socket
 	if pacman -Q lidm &>/dev/null; then
 		systemctl disable display-manager.service 2>/dev/null || true
 		systemctl disable getty@tty1

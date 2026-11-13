@@ -67,6 +67,7 @@ if [[ ${VM:-0} == 1 ]]; then
 	echo 'repo /repo 9p trans=virtio,version=9p2000.L,nofail,x-systemd.automount 0 0' >> /mnt/etc/fstab
 fi
 
+trap 'rm -rf /mnt/root/install' EXIT
 install -dm700 /mnt/root/install
 install -m600 "$conf" /mnt/root/install/install.conf
 install -m755 "$here/chroot.sh" "$here/lib.sh" "$here/grub-theme.sh" /mnt/root/install/

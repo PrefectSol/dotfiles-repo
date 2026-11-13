@@ -29,22 +29,23 @@ def vtrgb():
 
 
 FONT, FONT_SRC, FONT_SIZE, CHAR = "Mono Regular 32", "JetBrainsMonoNerdFont-SemiBold.ttf", 32, 19
-ITEMS, ITEM_H, ITEM_GAP = 5, 48, 12
+ITEMS, ITEM_H, ITEM_GAP = range(2, 13), 48, 12
 LINE, PAD, BAR, INNER = 2, 16, 4, 48
 BOX_W = 36 * CHAR + 2 * INNER
-MENU_H = ITEMS * ITEM_H + (ITEMS - 1) * ITEM_GAP
-BOX_H = MENU_H + 2 * (INNER - ITEM_GAP)
+FRAME = 2 * (INNER - ITEM_GAP) - ITEM_GAP
 
 
 def grub():
     d = os.path.join(repo, "theme/grub")
-    border = lambda x, y: x < LINE or y < LINE or x >= BOX_W - LINE or y >= BOX_H - LINE
-    png(os.path.join(d, "frame.png"), BOX_W, BOX_H, lambda x, y: rgba(8) if border(x, y) else CLEAR)
+    for n in ITEMS:
+        h = n * (ITEM_H + ITEM_GAP) + FRAME
+        border = lambda x, y: x < LINE or y < LINE or x >= BOX_W - LINE or y >= h - LINE
+        png(os.path.join(d, f"frame-{n}.png"), BOX_W, h, lambda x, y: rgba(8) if border(x, y) else CLEAR)
     png(os.path.join(d, "sel_w.png"), PAD, 1, lambda x, y: rgba("acc") if x < BAR else rgba("sel"))
     png(os.path.join(d, "sel_c.png"), 1, 1, lambda x, y: rgba("sel"))
     png(os.path.join(d, "sel_e.png"), PAD, 1, lambda x, y: rgba("sel"))
 
-    l, t = -BOX_W // 2, -BOX_H // 2
+    l = -BOX_W // 2
     pos = lambda v: "50%%%+d" % v
 
     parts = [("boot", 7), ("enter", "acc"), ("edit", 7), ("e", "acc"), ("console", 7), ("c", "acc")]
@@ -65,17 +66,17 @@ terminal-border: "0"
 
 + image {{
   left = {pos(l)}
-  top = {pos(t)}
+  top = 50%-@HALF@
   width = {BOX_W}
-  height = {BOX_H}
+  height = @BOX_H@
   file = "frame.png"
 }}
 
 + boot_menu {{
   left = {pos(l + INNER - PAD)}
-  top = {pos(t + INNER - ITEM_GAP)}
+  top = 50%-@MENU_TOP@
   width = {BOX_W - 2 * (INNER - PAD)}
-  height = {MENU_H}
+  height = @MENU_H@
   item_font = "{FONT}"
   item_color = "{c(7)}"
   selected_item_color = "{c(15)}"
@@ -91,7 +92,7 @@ terminal-border: "0"
 
 + label {{
   left = {pos(l)}
-  top = {pos(-t + 2 * CHAR)}
+  top = 50%+@LABEL_TOP@
   width = {BOX_W}
   align = "center"
   id = "__timeout__"
@@ -113,6 +114,8 @@ terminal-border: "0"
 '''
     with open(os.path.join(d, "theme.txt"), "w") as f:
         f.write(out)
+    with open(os.path.join(d, "layout"), "w") as f:
+        f.write(f"{ITEM_H + ITEM_GAP} {FRAME} {INNER - ITEM_GAP} {ITEM_GAP} {2 * CHAR} {ITEMS[0]} {ITEMS[-1]}\n")
     with open(os.path.join(d, "font"), "w") as f:
         f.write(f"{FONT_SRC} {FONT_SIZE}\n")
 
@@ -182,8 +185,35 @@ def dunst():
         f.write(body)
 
 
+def zathura():
+    body = f'''set font "monospace 11"
+set selection-clipboard clipboard
+set guioptions ""
+set default-bg "{c(0)}"
+set default-fg "{c(7)}"
+set statusbar-bg "{c(0)}"
+set statusbar-fg "{c(7)}"
+set inputbar-bg "{c(0)}"
+set inputbar-fg "{c(15)}"
+set notification-bg "{c(0)}"
+set notification-fg "{c(7)}"
+set notification-error-bg "{c(0)}"
+set notification-error-fg "{c(1)}"
+set notification-warning-bg "{c(0)}"
+set notification-warning-fg "{c(3)}"
+set completion-bg "{c(0)}"
+set completion-fg "{c(7)}"
+set completion-highlight-bg "{c("sel")}"
+set completion-highlight-fg "{c(15)}"
+set highlight-color "{c("acc")}"
+set highlight-active-color "{c("acchl")}"
+'''
+    with open(os.path.join(repo, "theme/zathurarc"), "w") as f:
+        f.write(body)
+
+
 def panel():
-    order = [0, "sel", 7, 15, 8, "acc", 4, 2, 1, 3, 5]
+    order = [0, "sel", 7, 15, 8, "acc", 15, 2, 1, 3, 5]
     body = "static const char *colors[] = {\n" + "".join(f'\t"{c(k)}",\n' for k in order) + "};\n"
     with open(os.path.join(repo, "pkgs/distro-panel/panel/colors.h"), "w") as f:
         f.write(body)
@@ -216,6 +246,7 @@ static const char *bordercolor = "{c("acc")}";
 vtrgb()
 grub()
 dunst()
+zathura()
 panel()
 suckless()
 png(os.path.join(repo, "theme/solid.png"), 1, 1, lambda x, y: rgba(0))

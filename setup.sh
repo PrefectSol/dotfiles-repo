@@ -3,13 +3,7 @@ set -euo pipefail
 repo=$(cd "$(dirname "$0")" && pwd)
 source "$repo/install/lib.sh"
 
-conda=0
-for a; do
-	case $a in
-	--conda) conda=1 ;;
-	*) die "usage: ./setup.sh [--conda]" ;;
-	esac
-done
+(($# == 0)) || die "usage: ./setup.sh"
 
 [[ -f /etc/arch-release ]] || die "Arch Linux required"
 ((EUID == 0)) || exec sudo "$0" "$@"
@@ -42,10 +36,11 @@ fi
 log "packages"
 skip='^$'
 ((grub)) || skip='^(grub|efibootmgr|os-prober)$'
-pacman -Qq linux-lts linux-zen linux-hardened &>/dev/null && skip+='|^linux$'
-pacman -Syu --noconfirm --needed $(grep -vE '^\s*(#|$)' "$repo/install/packages.txt" | grep -vE "$skip")
+pacman -Qq linux-lts linux-zen linux-hardened 2>/dev/null | grep -q . && skip+='|^linux$'
+retry pacman -Syu --noconfirm --needed $(grep -vE '^\s*(#|$)' "$repo/install/packages.txt" | grep -vE "$skip")
 
 log "local packages"
+pacman -Qq vimix-cursors &>/dev/null || rm -rf /usr/share/icons/Vimix-cursors
 out=/srv/$REPO_NAME
 install -d -o "$user" -g "$group" -m755 "$out"
 if [[ ! -f $out/$REPO_NAME.db ]]; then
@@ -55,8 +50,13 @@ if [[ ! -f $out/$REPO_NAME.db ]]; then
 fi
 add_local_repo /etc/pacman.conf "$out"
 pacman -Sy
-sudo -u "$user" DISTRO_REPO="$out" "$repo/scripts/build-repo.sh"
-pacman -Su --noconfirm --needed $(grep -vE '^\s*(#|$)' "$repo/install/packages-local.txt")
+retry sudo -u "$user" DISTRO_REPO="$out" "$repo/scripts/build-repo.sh"
+retry pacman -Su --noconfirm --needed $(grep -vE '^\s*(#|$)' "$repo/install/packages-local.txt")
+
+if pacman -Qq nvidia-utils &>/dev/null; then
+	log "nvidia video decoding"
+	retry pacman -S --noconfirm --needed libva-nvidia-driver
+fi
 
 log "locales"
 gen_locales
@@ -64,13 +64,10 @@ gen_locales
 log "initramfs"
 mkinitcpio -P
 
-log "cursor: vimix"
-install_cursor
-
 log "bootloader"
 if ((grub)); then
-	"$repo/install/grub-theme.sh" "$repo/theme/grub"
 	grub-mkconfig -o /boot/grub/grub.cfg
+	"$repo/install/grub-theme.sh" "$repo/theme/grub"
 else
 	for e in /boot/loader/entries/*.conf /efi/loader/entries/*.conf /boot/efi/loader/entries/*.conf; do
 		[[ -f $e ]] || continue
@@ -81,10 +78,8 @@ fi
 log "yay"
 install_yay "$user"
 
-if ((conda)); then
-	log "miniforge"
-	install_miniforge "$user"
-fi
+log "miniforge"
+install_miniforge "$user"
 
 log "services"
 enable_services
@@ -95,6 +90,8 @@ sudo -u "$user" mkdir -p "$home/.config"
 for d in nvim yazi; do
 	[[ -e $home/.config/$d ]] || sudo -u "$user" cp -r "/etc/skel/.config/$d" "$home/.config/$d"
 done
+[[ -e $home/.config/user-dirs.dirs ]] || sudo -u "$user" cp /etc/skel/.config/user-dirs.dirs "$home/.config/user-dirs.dirs"
+sudo -u "$user" mkdir -p "$home/downloads"
 [[ -e $home/.zshrc ]] || sudo -u "$user" touch "$home/.zshrc"
 
 log "done, reboot to start the desktop"

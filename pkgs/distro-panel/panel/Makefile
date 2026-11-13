@@ -1,7 +1,7 @@
 PREFIX = /usr/local
 PKGS = x11 xft xinerama xtst fontconfig
 CFLAGS ?= -O2
-CFLAGS += -std=c99 -Wall -Wextra -pedantic -D_DEFAULT_SOURCE -D_XOPEN_SOURCE=700 $(shell pkg-config --cflags $(PKGS))
+CFLAGS += -pthread -std=c99 -Wall -Wextra -pedantic -D_DEFAULT_SOURCE -D_XOPEN_SOURCE=700 $(shell pkg-config --cflags $(PKGS))
 LDLIBS += $(shell pkg-config --libs $(PKGS))
 
 distro-panel: panel.c config.h colors.h

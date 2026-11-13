@@ -1,14 +1,15 @@
 pkgname=distro-desktop
 pkgver=0.1
-pkgrel=46
+pkgrel=53
 pkgdesc='dwm desktop session'
 arch=(any)
 license=(MIT)
 install=distro-desktop.install
-depends=(dwm st dmenu dwmblocks distro-panel distro-utils lidm picom clipnotify xclip file xwallpaper flameshot yazi ueberzugpp poppler 7zip jq fd ripgrep fzf firefox
+depends=(dwm st dmenu dwmblocks distro-panel distro-utils lidm picom xclip file xwallpaper flameshot yazi ueberzugpp poppler 7zip jq fd ripgrep fzf zoxide firefox
+  xdg-utils vimix-cursors mpv nsxiv zathura zathura-pdf-poppler
   dunst libnotify zsh zsh-completions oh-my-zsh adw-gtk-theme dconf
   polkit-gnome xdg-desktop-portal-gtk xf86-input-libinput
-  xorg-server xorg-xrdb xorg-xset xorg-xsetroot xorg-xrandr)
+  xorg-server xorg-xrdb xorg-xset xorg-setxkbmap xorg-xsetroot xorg-xrandr)
 
 package() {
   local f=$startdir/files t=$startdir/../../theme
@@ -17,11 +18,14 @@ package() {
   install -Dm644 "$f/share/distro-portals.conf" "$pkgdir/usr/share/xdg-desktop-portal/distro-portals.conf"
   install -Dm644 -t "$pkgdir/usr/share/distro" "$f/share/picom.conf" "$f/share/Xresources" "$t/palette" "$t/solid.png"
   install -Dm644 "$t/dunstrc" "$pkgdir/usr/share/distro/dunstrc"
+  install -Dm644 "$t/zathurarc" "$pkgdir/etc/zathurarc"
+  install -Dm644 "$f/share/mimeapps.list" "$pkgdir/etc/xdg/mimeapps.list"
   install -Dm644 "$f/share/profile.sh" "$pkgdir/etc/profile.d/distro.sh"
   install -Dm644 "$f/share/zsh/zshrc" "$pkgdir/etc/zsh/zshrc"
   install -Dm644 "$f/share/less/syslesskey" "$pkgdir/etc/syslesskey"
   install -Dm644 "$f/share/zsh/distro.zsh-theme" "$pkgdir/usr/share/oh-my-zsh/custom/themes/distro.zsh-theme"
   install -Dm644 /dev/null "$pkgdir/etc/skel/.zshrc"
+  install -Dm644 "$f/share/user-dirs.dirs" "$pkgdir/etc/skel/.config/user-dirs.dirs"
   install -Dm644 -t "$pkgdir/etc/skel/.config/yazi" "$f/share/yazi/yazi.toml" "$f/share/yazi/theme.toml" "$f/share/yazi/init.lua" "$f/share/yazi/keymap.toml"
   install -Dm644 -t "$pkgdir/etc/skel/.config/yazi/plugins/center-image.yazi" "$f/share/yazi/plugins/center-image.yazi/main.lua"
   (cd "$f/share/nvim" && find . -type f -exec install -Dm644 {} "$pkgdir/etc/skel/.config/nvim/{}" \;)
@@ -29,12 +33,12 @@ package() {
   install -Dm644 "$f/share/firefox/policies.json" "$pkgdir/usr/lib/firefox/distribution/policies.json"
   install -Dm644 "$f/share/firefox/autoconfig.js" "$pkgdir/usr/lib/firefox/defaults/pref/autoconfig.js"
   install -Dm644 "$f/share/firefox/distro.cfg" "$pkgdir/usr/lib/firefox/distro.cfg"
-  install -Dm644 -t "$pkgdir/usr/share/distro/firefox" "$f/share/firefox/chrome.css" "$f/share/firefox/content.css" "$f/share/firefox/newtab.html"
+  install -Dm644 -t "$pkgdir/usr/share/distro/firefox" "$f/share/firefox/chrome.css" "$f/share/firefox/agent.css" "$f/share/firefox/content.css" "$f/share/firefox/newtab.html"
   install -Dm644 "$f/share/gtk/settings3.ini" "$pkgdir/etc/xdg/gtk-3.0/settings.ini"
   install -Dm644 "$f/share/gtk/settings4.ini" "$pkgdir/etc/xdg/gtk-4.0/settings.ini"
   install -Dm644 "$f/share/dconf/profile" "$pkgdir/etc/dconf/profile/user"
   install -Dm644 "$f/share/dconf/00-distro" "$pkgdir/etc/dconf/db/local.d/00-distro"
   install -dm755 "$pkgdir/usr/share/backgrounds/distro"
-  find "$t/wallpapers" -maxdepth 1 -type f -name '[0-9]*' \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) \
+  find "$t/wallpapers" -maxdepth 1 -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) \
     -exec install -m644 -t "$pkgdir/usr/share/backgrounds/distro" {} +
 }

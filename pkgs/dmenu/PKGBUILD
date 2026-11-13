@@ -1,11 +1,11 @@
 pkgname=dmenu
 pkgver=5.4
-pkgrel=10
+pkgrel=15
 pkgdesc='Dynamic menu'
 arch=(x86_64)
 url=https://tools.suckless.org/dmenu
 license=(MIT)
-depends=(libx11 libxinerama libxft freetype2 fontconfig imlib2)
+depends=(libx11 libxinerama libxft libxtst freetype2 fontconfig imlib2)
 
 prepare() {
   rm -rf dmenu

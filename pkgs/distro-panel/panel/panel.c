@@ -7,8 +7,10 @@
 #include <X11/extensions/XTest.h>
 #include <arpa/inet.h>
 #include <dirent.h>
+#include <fcntl.h>
 #include <ifaddrs.h>
 #include <netinet/in.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -81,6 +83,21 @@ static Audio *dragaudio;
 static int dragid = -1;
 static char gpuname[96], gpuinfo[96];
 static int gpuutil = -1, gpumemused, gpumemtotal, gputemp;
+
+
+typedef struct {
+	Node sinks[8], sources[8];
+	Stream streams[12];
+	int nsinks, nsources, nstreams;
+	Audio sink, source;
+	char gpuname[96], gpuinfo[96];
+	int gpuutil, gpumemused, gpumemtotal, gputemp;
+} Poll;
+
+static Poll ready;
+static pthread_mutex_t plock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t pcond = PTHREAD_COND_INITIALIZER;
+static int pfd[2], fresh, kicked, regrab;
 
 static void place(int *x, int *y);
 
@@ -195,14 +212,14 @@ volread(const char *node, float *vol, int *muted)
 }
 
 static void
-audiostatus(void)
+audiostatus(Poll *d)
 {
 	char line[512], *p, *q, *e;
 	FILE *fp;
 	int section = 0, inaudio = 0, indent, top = -1, i;
 	Node *n;
 
-	nsinks = nsources = nstreams = 0;
+	d->nsinks = d->nsources = d->nstreams = 0;
 	if (!(fp = popen("wpctl status 2>/dev/null", "r")))
 		return;
 	while (fgets(line, sizeof(line), fp)) {
@@ -240,28 +257,28 @@ audiostatus(void)
 				break;
 		if (section == 3) {
 			if (top >= 0 && indent > top) {
-				if (nstreams && strstr(q, " < "))
-					streams[nstreams - 1].capture = 1;
+				if (d->nstreams && strstr(q, " < "))
+					d->streams[d->nstreams - 1].capture = 1;
 				continue;
 			}
 			top = indent;
-			if (nstreams >= (int)(sizeof(streams) / sizeof(streams[0])))
+			if (d->nstreams >= (int)(sizeof(d->streams) / sizeof(d->streams[0])))
 				continue;
-			streams[nstreams].id = atoi(p);
-			streams[nstreams].capture = 0;
+			d->streams[d->nstreams].id = atoi(p);
+			d->streams[d->nstreams].capture = 0;
 			q += 2;
 			while (*q == ' ')
 				q++;
-			snprintf(streams[nstreams].name, sizeof(streams[nstreams].name), "%s", q);
-			for (i = (int)strlen(streams[nstreams].name) - 1; i >= 0 && (streams[nstreams].name[i] == ' ' || streams[nstreams].name[i] == '\n'); i--)
-				streams[nstreams].name[i] = '\0';
-			nstreams++;
+			snprintf(d->streams[d->nstreams].name, sizeof(d->streams[d->nstreams].name), "%s", q);
+			for (i = (int)strlen(d->streams[d->nstreams].name) - 1; i >= 0 && (d->streams[d->nstreams].name[i] == ' ' || d->streams[d->nstreams].name[i] == '\n'); i--)
+				d->streams[d->nstreams].name[i] = '\0';
+			d->nstreams++;
 			continue;
 		}
-		if (section == 1 && nsinks < 8)
-			n = &sinks[nsinks++];
-		else if (section == 2 && nsources < 8)
-			n = &sources[nsources++];
+		if (section == 1 && d->nsinks < 8)
+			n = &d->sinks[d->nsinks++];
+		else if (section == 2 && d->nsources < 8)
+			n = &d->sources[d->nsources++];
 		else
 			continue;
 		n->id = atoi(p);
@@ -276,29 +293,29 @@ audiostatus(void)
 			n->name[i] = '\0';
 	}
 	pclose(fp);
-	sink.name[0] = source.name[0] = '\0';
-	for (i = 0; i < nsinks; i++)
-		if (sinks[i].def)
-			snprintf(sink.name, sizeof(sink.name), "%s", sinks[i].name);
-	for (i = 0; i < nsources; i++)
-		if (sources[i].def)
-			snprintf(source.name, sizeof(source.name), "%s", sources[i].name);
-	for (i = 0; i < nstreams; i++) {
+	d->sink.name[0] = d->source.name[0] = '\0';
+	for (i = 0; i < d->nsinks; i++)
+		if (d->sinks[i].def)
+			snprintf(d->sink.name, sizeof(d->sink.name), "%s", d->sinks[i].name);
+	for (i = 0; i < d->nsources; i++)
+		if (d->sources[i].def)
+			snprintf(d->source.name, sizeof(d->source.name), "%s", d->sources[i].name);
+	for (i = 0; i < d->nstreams; i++) {
 		char id[16];
 
-		snprintf(id, sizeof(id), "%d", streams[i].id);
-		streams[i].valid = volread(id, &streams[i].vol, &streams[i].muted);
+		snprintf(id, sizeof(id), "%d", d->streams[i].id);
+		d->streams[i].valid = volread(id, &d->streams[i].vol, &d->streams[i].muted);
 	}
 }
 
 static void
-gpuread(void)
+gpuread(Poll *d)
 {
 	char line[256], name[96];
 	int util = 0, used = 0, total = 0, temp = 0;
 	FILE *fp;
 
-	gpuname[0] = gpuinfo[0] = '\0';
+	d->gpuname[0] = d->gpuinfo[0] = '\0';
 	if (access("/usr/bin/nvidia-smi", X_OK))
 		return;
 	if (!(fp = popen("nvidia-smi --query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu "
@@ -306,12 +323,12 @@ gpuread(void)
 		return;
 	if (fgets(line, sizeof(line), fp) &&
 	    sscanf(line, "%95[^,], %d, %d, %d, %d", name, &util, &used, &total, &temp) == 5) {
-		snprintf(gpuname, sizeof(gpuname) - 4, "%s", name);
-		snprintf(gpuinfo, sizeof(gpuinfo), "%d%%  %.1f / %.1f GiB  %d°C", util, used / 1024.0, total / 1024.0, temp);
-		gpuutil = util;
-		gpumemused = used;
-		gpumemtotal = total;
-		gputemp = temp;
+		snprintf(d->gpuname, sizeof(d->gpuname) - 4, "%s", name);
+		snprintf(d->gpuinfo, sizeof(d->gpuinfo), "%d%%  %.1f / %.1f GiB  %d°C", util, used / 1024.0, total / 1024.0, temp);
+		d->gpuutil = util;
+		d->gpumemused = used;
+		d->gpumemtotal = total;
+		d->gputemp = temp;
 	}
 	pclose(fp);
 }
@@ -331,6 +348,91 @@ audioread(Audio *a)
 		a->muted = strstr(line, "MUTED") != NULL;
 	}
 	pclose(fp);
+}
+
+static void
+pollonce(Poll *d)
+{
+	if (sysview)
+		gpuread(d);
+	else {
+		audioread(&d->sink);
+		audioread(&d->source);
+		audiostatus(d);
+	}
+}
+
+static void *
+poller(void *arg)
+{
+	static Poll w;
+	struct timespec ts;
+
+	(void)arg;
+	w.sink.node = SINK;
+	w.source.node = SOURCE;
+	w.gpuutil = -1;
+	for (;;) {
+		pthread_mutex_lock(&plock);
+		if (!kicked) {
+			clock_gettime(CLOCK_REALTIME, &ts);
+			ts.tv_sec += sysview ? 2 : 1;
+			pthread_cond_timedwait(&pcond, &plock, &ts);
+		}
+		kicked = 0;
+		pthread_mutex_unlock(&plock);
+		pollonce(&w);
+		pthread_mutex_lock(&plock);
+		ready = w;
+		fresh = 1;
+		pthread_mutex_unlock(&plock);
+		if (write(pfd[1], "", 1) < 0)
+			continue;
+	}
+	return NULL;
+}
+
+static void
+kick(void)
+{
+	pthread_mutex_lock(&plock);
+	kicked = 1;
+	pthread_cond_signal(&pcond);
+	pthread_mutex_unlock(&plock);
+}
+
+static void
+publish(void)
+{
+	char c[16];
+
+	while (read(pfd[0], c, sizeof(c)) > 0)
+		;
+	pthread_mutex_lock(&plock);
+	if (fresh && !dragaudio && dragid < 0) {
+		fresh = 0;
+		memcpy(sinks, ready.sinks, sizeof(sinks));
+		memcpy(sources, ready.sources, sizeof(sources));
+		memcpy(streams, ready.streams, sizeof(streams));
+		nsinks = ready.nsinks;
+		nsources = ready.nsources;
+		nstreams = ready.nstreams;
+		sink.vol = ready.sink.vol;
+		sink.muted = ready.sink.muted;
+		sink.valid = ready.sink.valid;
+		source.vol = ready.source.vol;
+		source.muted = ready.source.muted;
+		source.valid = ready.source.valid;
+		memcpy(sink.name, ready.sink.name, sizeof(sink.name));
+		memcpy(source.name, ready.source.name, sizeof(source.name));
+		memcpy(gpuname, ready.gpuname, sizeof(gpuname));
+		memcpy(gpuinfo, ready.gpuinfo, sizeof(gpuinfo));
+		gpuutil = ready.gpuutil;
+		gpumemused = ready.gpumemused;
+		gpumemtotal = ready.gpumemtotal;
+		gputemp = ready.gputemp;
+	}
+	pthread_mutex_unlock(&plock);
 }
 
 static void
@@ -444,15 +546,8 @@ seed(void)
 static void
 refresh(void)
 {
-	if (!sysview) {
-		audioread(&sink);
-		audioread(&source);
-		audiostatus();
-	}
 	ticks++;
 	if (sysview) {
-		if (ticks % 2 == 1)
-			gpuread();
 		cpusample();
 		netsample();
 	}
@@ -986,14 +1081,14 @@ static void
 setvolume(Audio *a, const char *arg)
 {
 	run("wpctl set-volume -l 1 %s %s >/dev/null 2>&1", a->node, arg);
-	audioread(a);
+	kick();
 }
 
 static void
 togglemute(Audio *a)
 {
 	run("wpctl set-mute %s %s >/dev/null 2>&1", a->node, "toggle");
-	audioread(a);
+	kick();
 }
 
 static double
@@ -1028,12 +1123,9 @@ drag(int x)
 static void
 dragend(void)
 {
-	if (dragaudio)
-		audioread(dragaudio);
-	else
-		audiostatus();
 	dragaudio = NULL;
 	dragid = -1;
+	kick();
 }
 
 static int
@@ -1062,9 +1154,7 @@ nodeclick(Node *nodes, int n, int x, int y)
 	for (i = 0; i < n; i++) {
 		if (inrect(nodes[i].row, x, y)) {
 			runid("wpctl set-default %d >/dev/null 2>&1%s", nodes[i].id, "");
-			audioread(&sink);
-			audioread(&source);
-			audiostatus();
+			kick();
 			return 1;
 		}
 	}
@@ -1092,7 +1182,7 @@ streamclick(int b, int x, int y)
 			drag(x);
 			return 1;
 		}
-		audiostatus();
+		kick();
 		return 1;
 	}
 	return 0;
@@ -1176,13 +1266,34 @@ switchview(void)
 }
 
 static void
+passkey(XKeyEvent *e, int close)
+{
+	XUngrabKeyboard(dpy, CurrentTime);
+	XTestFakeKeyEvent(dpy, e->keycode, False, CurrentTime);
+	XTestFakeKeyEvent(dpy, e->keycode, True, CurrentTime);
+	XSync(dpy, False);
+	if (close)
+		running = 0;
+	else
+		regrab = 1;
+}
+
+static void
 keypress(XKeyEvent *e)
 {
 	KeySym k = XLookupKeysym(e, 0);
 
+	if (k >= 0x1008ff00 && k <= 0x1008ffff) {
+		passkey(e, 0);
+		return;
+	}
 	if (e->state & Mod4Mask) {
 		if ((k == syskey && !sysview) || (k == datekey && sysview))
 			switchview();
+		else if (k >= XK_F1 && k <= XK_F12)
+			passkey(e, 0);
+		else if (k != syskey && k != datekey && !IsModifierKey(k))
+			passkey(e, 1);
 		return;
 	}
 	if (k == XK_Escape || k == XK_q) {
@@ -1319,6 +1430,9 @@ main(int argc, char *argv[])
 	FILE *fp;
 	int i, x, y, fd, depth, old;
 	sigset_t mask;
+	pthread_t thread;
+	struct timespec now;
+	time_t tick;
 
 	sigemptyset(&mask);
 	sigprocmask(SIG_SETMASK, &mask, NULL);
@@ -1353,6 +1467,16 @@ main(int argc, char *argv[])
 	if (sysview)
 		seed();
 	refresh();
+	if (pipe(pfd) < 0)
+		die("cannot create pipe");
+	fcntl(pfd[0], F_SETFL, O_NONBLOCK);
+	fcntl(pfd[1], F_SETFL, O_NONBLOCK);
+	ready.sink.node = SINK;
+	ready.source.node = SOURCE;
+	ready.gpuutil = -1;
+	pollonce(&ready);
+	fresh = 1;
+	publish();
 
 	painting = 0;
 	H = layout();
@@ -1376,10 +1500,13 @@ main(int argc, char *argv[])
 	XSync(dpy, False);
 	claim(old);
 	grab();
+	if (pthread_create(&thread, NULL, poller, NULL))
+		die("cannot start poller");
 
 	fd = ConnectionNumber(dpy);
+	clock_gettime(CLOCK_REALTIME, &now);
+	tick = now.tv_sec;
 	while (running) {
-		struct timespec now;
 		struct timeval tv;
 
 		while (running && XPending(dpy)) {
@@ -1415,13 +1542,23 @@ main(int argc, char *argv[])
 		}
 		if (!running)
 			break;
+		if (regrab && XGrabKeyboard(dpy, win, True, GrabModeAsync, GrabModeAsync, CurrentTime) == GrabSuccess) {
+			regrab = 0;
+			kick();
+		}
 		clock_gettime(CLOCK_REALTIME, &now);
+		if (now.tv_sec != tick) {
+			tick = now.tv_sec;
+			refresh();
+			draw();
+		}
 		tv.tv_sec = 0;
-		tv.tv_usec = 1000000 - now.tv_nsec / 1000;
+		tv.tv_usec = regrab ? 50000 : 1000000 - now.tv_nsec / 1000;
 		FD_ZERO(&fds);
 		FD_SET(fd, &fds);
-		if (select(fd + 1, &fds, NULL, NULL, &tv) == 0) {
-			refresh();
+		FD_SET(pfd[0], &fds);
+		if (select((fd > pfd[0] ? fd : pfd[0]) + 1, &fds, NULL, NULL, &tv) > 0 && FD_ISSET(pfd[0], &fds)) {
+			publish();
 			draw();
 		}
 	}

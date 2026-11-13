@@ -13,7 +13,8 @@ alias ls='ls -a --color=auto'
 alias grep='grep --color=auto'
 
 gcc-switch() { command gcc-switch "$@" && rehash }
-cuda-switch() { command cuda-switch "$@" && rehash }
+cuda-switch() { command cuda-switch "$@" && source /etc/profile.d/distro.sh && rehash }
+ssh() { TERM=xterm-256color command ssh "$@" }
 firefox() { command firefox "$@" >/dev/null 2>&1 &! }
 cd() {
 	if [[ $# -eq 1 && $1 =~ '^\.\.\.+(/.*)?$' ]]; then
@@ -24,6 +25,8 @@ cd() {
 		builtin cd "$@"
 	fi
 }
+
+(( $+commands[zoxide] )) && eval "$(zoxide init zsh)"
 
 if [[ -x /opt/conda/bin/conda ]]; then
 	conda() {

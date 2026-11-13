@@ -24,10 +24,8 @@ echo "root:$PASSWORD" | chpasswd
 id "$USERNAME" &>/dev/null || useradd -m -G wheel -s /usr/bin/zsh "$USERNAME"
 echo "$USERNAME:$PASSWORD" | chpasswd
 
-if [[ ${CONDA:-0} == 1 ]]; then
-	log "miniforge"
-	install_miniforge "$USERNAME"
-fi
+log "miniforge"
+install_miniforge "$USERNAME"
 
 log "swap"
 if [[ ! -f /swapfile ]]; then
@@ -38,13 +36,8 @@ fi
 log "initramfs"
 mkinitcpio -P
 
-log "cursor: vimix"
-install_cursor
-
-log "grub theme"
-/root/install/grub-theme.sh /root/install/grub-theme
-
 log "yay"
+trap 'rm -f /etc/sudoers.d/99-install' EXIT
 echo "$USERNAME ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/99-install
 install_yay "$USERNAME"
 rm -f /etc/sudoers.d/99-install
@@ -56,6 +49,7 @@ fi
 grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB
 grub-install --target=x86_64-efi --efi-directory=/efi --removable
 grub-mkconfig -o /boot/grub/grub.cfg
+/root/install/grub-theme.sh /root/install/grub-theme
 
 log "services"
 enable_services

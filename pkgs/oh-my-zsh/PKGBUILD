@@ -1,13 +1,13 @@
 pkgname=oh-my-zsh
 pkgver=r8009.6010fb626
-pkgrel=1
+pkgrel=2
 pkgdesc='Oh My Zsh, installed system-wide'
 arch=(any)
 url=https://ohmyz.sh
 license=(MIT)
 depends=(zsh git zsh-autosuggestions zsh-syntax-highlighting)
 makedepends=(git)
-source=("ohmyzsh::git+https://github.com/ohmyzsh/ohmyzsh.git")
+source=("ohmyzsh::git+https://github.com/ohmyzsh/ohmyzsh.git#commit=6010fb6260f359e71d99ba25f05f9215809b3ed2")
 sha256sums=(SKIP)
 
 pkgver() {

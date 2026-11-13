@@ -1,6 +1,6 @@
 pkgname=lidm
 pkgver=2.0.2
-pkgrel=9
+pkgrel=11
 pkgdesc='Minimal TUI display manager'
 arch=(x86_64)
 url=https://github.com/javalsai/lidm
