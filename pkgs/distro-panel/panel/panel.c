@@ -29,6 +29,7 @@
 #define SOURCE "@DEFAULT_AUDIO_SOURCE@"
 
 enum { CBg, CSel, CFg, CFgSel, CDim, CAccent, CHead, COk, CErr, CWarn, CMag, CLast };
+enum { RCal, RVol, ROut, RMic, RIn, RApp };
 
 typedef struct {
 	int x, y, w, h;
@@ -38,9 +39,12 @@ typedef struct {
 	const char *node;
 	float vol;
 	int muted, valid;
-	char name[128];
 	Rect label, bar;
 } Audio;
+
+typedef struct {
+	Rect row, prev, next;
+} Picker;
 
 static Display *dpy;
 static Window root, win;
@@ -56,6 +60,8 @@ static char pidpath[256];
 static int calmon, calyear, ticks;
 static Audio sink = { .node = SINK }, source = { .node = SOURCE };
 static Rect rprev, rnext, rcal;
+static Picker psink, psource;
+static int sel;
 static unsigned long long cputotal[65], cpuidle[65];
 static int cpupct[65], ncpu;
 static int painting = 1, sysview, bary, closing, replay, stay;
@@ -65,7 +71,6 @@ static double nett, rxrate, txrate;
 typedef struct {
 	int id, def;
 	char name[96];
-	Rect row;
 } Node;
 
 typedef struct {
@@ -293,13 +298,6 @@ audiostatus(Poll *d)
 			n->name[i] = '\0';
 	}
 	pclose(fp);
-	d->sink.name[0] = d->source.name[0] = '\0';
-	for (i = 0; i < d->nsinks; i++)
-		if (d->sinks[i].def)
-			snprintf(d->sink.name, sizeof(d->sink.name), "%s", d->sinks[i].name);
-	for (i = 0; i < d->nsources; i++)
-		if (d->sources[i].def)
-			snprintf(d->source.name, sizeof(d->source.name), "%s", d->sources[i].name);
 	for (i = 0; i < d->nstreams; i++) {
 		char id[16];
 
@@ -423,8 +421,6 @@ publish(void)
 		source.vol = ready.source.vol;
 		source.muted = ready.source.muted;
 		source.valid = ready.source.valid;
-		memcpy(sink.name, ready.sink.name, sizeof(sink.name));
-		memcpy(source.name, ready.source.name, sizeof(source.name));
 		memcpy(gpuname, ready.gpuname, sizeof(gpuname));
 		memcpy(gpuinfo, ready.gpuinfo, sizeof(gpuinfo));
 		gpuutil = ready.gpuutil;
@@ -593,6 +589,13 @@ separator(int *y)
 }
 
 static void
+mark(int y, int row)
+{
+	if (row == sel)
+		fill((border + pad) / 2 - 1, y + 2, 3, lh - 4, CAccent);
+}
+
+static void
 drawheader(int *y)
 {
 	static const char *wd[] = { "sun", "mon", "tue", "wed", "thu", "fri", "sat" };
@@ -627,6 +630,7 @@ drawcal(int *y)
 	days = mdays(calyear, calmon);
 	gx = (W - 20 * cw) / 2;
 
+	mark(*y, RCal);
 	text(pad, *y, CHead, "calendar");
 	snprintf(tbuf, sizeof(tbuf), "%s %d", months[calmon], calyear);
 	tw = textw(tbuf);
@@ -659,53 +663,46 @@ drawcal(int *y)
 }
 
 static void
-drawaudio(int *y, Audio *a, const char *label)
+drawaudio(int *y, Audio *a, const char *label, int row)
 {
-	char name[160], pct[16];
-	int nx = vcol, bw, bh, by;
+	char pct[16];
+	int bx = vcol, bw = W - pad - bx - textw("100%") - cw, bh = lh / 5 > 4 ? lh / 5 : 4;
 
-	text(pad, *y, CDim, label);
-	snprintf(name, sizeof(name) - 4, "%s", a->valid && a->name[0] ? a->name : a->valid ? "default" : "unavailable");
-	if (a->valid && a->muted)
-		textr(W - pad, *y, CErr, "muted");
-	fit(name, W - pad - nx - (a->valid && a->muted ? 7 * cw : 0));
-	text(nx, *y, a->valid ? CFg : CDim, name);
-	a->label = (Rect){ 0, *y, W, lh };
-	*y += lh;
-	if (!a->valid) {
-		a->bar = (Rect){ 0 };
-		return;
+	mark(*y, row);
+	text(pad, *y, row == sel ? CFgSel : CDim, label);
+	a->label = (Rect){ 0, *y, bx, lh };
+	a->bar = (Rect){ 0 };
+	if (a->valid) {
+		fill(bx, *y + (lh - bh) / 2, bw, bh, CSel);
+		fill(bx, *y + (lh - bh) / 2, (int)(bw * (a->vol > 1 ? 1 : a->vol) + 0.5), bh, a->muted ? CDim : CAccent);
+		snprintf(pct, sizeof(pct), "%d%%", (int)(a->vol * 100 + 0.5));
+		textr(W - pad, *y, a->muted ? CDim : CFg, a->muted ? "mute" : pct);
+		a->bar = (Rect){ bx, *y, bw, lh };
+	} else {
+		text(bx, *y, CDim, "unavailable");
 	}
-
-	bw = W - pad - nx - textw("100%") - cw;
-	bh = lh / 5 > 4 ? lh / 5 : 4;
-	by = *y + (lh - bh) / 2;
-	fill(nx, by, bw, bh, CSel);
-	fill(nx, by, (int)(bw * (a->vol > 1 ? 1 : a->vol) + 0.5), bh, a->muted ? CDim : CAccent);
-	snprintf(pct, sizeof(pct), "%d%%", (int)(a->vol * 100 + 0.5));
-	textr(W - pad, *y, a->muted ? CDim : CFg, pct);
-	a->bar = (Rect){ nx, *y, bw, lh };
 	*y += lh;
 }
 
 static void
-drawnodes(int *y, Node *nodes, int n, const char *label)
+drawpicker(int *y, Node *nodes, int n, const char *label, int row, Picker *p)
 {
-	char name[128];
-	int i, nx = vcol;
+	char name[128] = "none";
+	int i, x = vcol, xr = W - pad, w = xr - x - 4 * cw;
 
-	text(pad, *y, CDim, label);
-	if (!n) {
-		text(nx, *y, CDim, "none");
-		*y += lh;
-	}
-	for (i = 0; i < n; i++) {
-		snprintf(name, sizeof(name) - 4, "%s", nodes[i].name);
-		fit(name, W - pad - nx);
-		text(nx, *y, nodes[i].def ? CAccent : CFg, name);
-		nodes[i].row = (Rect){ 0, *y, W, lh };
-		*y += lh;
-	}
+	mark(*y, row);
+	text(pad, *y, row == sel ? CFgSel : CDim, label);
+	for (i = 0; i < n; i++)
+		if (nodes[i].def)
+			snprintf(name, sizeof(name) - 4, "%s", nodes[i].name);
+	fit(name, w);
+	text(x, *y, CDim, "<");
+	text(x + 2 * cw + (w - textw(name)) / 2, *y, n ? CFg : CDim, name);
+	textr(xr, *y, CDim, ">");
+	p->prev = (Rect){ x - cw, *y, 3 * cw, lh };
+	p->next = (Rect){ xr - 2 * cw, *y, 3 * cw, lh };
+	p->row = (Rect){ 0, *y, W, lh };
+	*y += lh;
 }
 
 static void
@@ -714,19 +711,18 @@ drawstreams(int *y)
 	char name[96], pct[16];
 	int i, nw = 13 * cw, bx = vcol, bw = W - pad - bx - textw("100%") - cw, bh = lh / 5 > 4 ? lh / 5 : 4;
 
-	text(pad, *y, CDim, "applications");
-	if (!nstreams) {
-		text(vcol, *y, CDim, "none");
-		*y += lh;
+	if (!nstreams)
 		return;
-	}
+	*y += lh / 2;
+	text(pad, *y, CDim, "apps");
 	*y += lh;
 	for (i = 0; i < nstreams; i++) {
 		Stream *st = &streams[i];
 
 		snprintf(name, sizeof(name) - 4, "%s%s", st->capture ? "in: " : "", st->name);
 		fit(name, nw);
-		text(pad + cw, *y, st->muted ? CDim : CFg, name);
+		mark(*y, RApp + i);
+		text(pad + cw, *y, RApp + i == sel ? CFgSel : st->muted ? CDim : CFg, name);
 		fill(bx, *y + (lh - bh) / 2, bw, bh, CSel);
 		if (st->valid) {
 			float v = st->vol > 1 ? 1 : st->vol;
@@ -1031,18 +1027,18 @@ layout(void)
 
 	if (sysview)
 		return layoutsys();
+	if (sel > RIn + nstreams)
+		sel = RIn + nstreams;
 
 	drawheader(&y);
 	drawcal(&y);
 	separator(&y);
 	text(pad, y, CHead, "sound");
 	y += lh;
-	drawaudio(&y, &sink, "output");
-	drawaudio(&y, &source, "input");
-	y += lh / 2;
-	drawnodes(&y, sinks, nsinks, "outputs");
-	drawnodes(&y, sources, nsources, "inputs");
-	y += lh / 2;
+	drawaudio(&y, &sink, "volume", RVol);
+	drawpicker(&y, sinks, nsinks, "output", ROut, &psink);
+	drawaudio(&y, &source, "mic", RMic);
+	drawpicker(&y, sources, nsources, "input", RIn, &psource);
 	drawstreams(&y);
 	separator(&y);
 	drawsystem(&y);
@@ -1128,11 +1124,72 @@ dragend(void)
 	kick();
 }
 
+static void
+setdefault(Node *nodes, int n, int delta, int capture)
+{
+	int i, cur = 0;
+
+	if (n < 2)
+		return;
+	for (i = 0; i < n; i++)
+		if (nodes[i].def)
+			cur = i;
+	nodes[cur].def = 0;
+	cur = (cur + delta + n) % n;
+	nodes[cur].def = 1;
+	runid("wpctl set-default %d >/dev/null 2>&1%s", nodes[cur].id, "");
+	for (i = 0; i < nstreams; i++)
+		if (streams[i].capture == capture) {
+			runid("pw-metadata -d %d %s >/dev/null 2>&1", streams[i].id, "target.object");
+			runid("pw-metadata -d %d %s >/dev/null 2>&1", streams[i].id, "target.node");
+		}
+	kick();
+}
+
+static void
+adjust(int delta)
+{
+	const char *arg = delta > 0 ? "5%+" : "5%-";
+
+	switch (sel) {
+	case RCal:
+		month(delta);
+		break;
+	case RVol:
+		setvolume(&sink, arg);
+		break;
+	case ROut:
+		setdefault(sinks, nsinks, delta, 0);
+		break;
+	case RMic:
+		setvolume(&source, arg);
+		break;
+	case RIn:
+		setdefault(sources, nsources, delta, 1);
+		break;
+	default:
+		runid("wpctl set-volume -l 1 %d %s >/dev/null 2>&1", streams[sel - RApp].id, arg);
+		kick();
+	}
+}
+
+static void
+mute(void)
+{
+	if (sel < RApp) {
+		togglemute(sel >= RMic ? &source : &sink);
+		return;
+	}
+	runid("wpctl set-mute %d %s >/dev/null 2>&1", streams[sel - RApp].id, "toggle");
+	kick();
+}
+
 static int
-audioclick(Audio *a, int b, int x, int y)
+audioclick(Audio *a, int row, int b, int x, int y)
 {
 	if (!inrect(a->label, x, y) && !inrect(a->bar, x, y))
 		return 0;
+	sel = row;
 	if (b == Button4)
 		setvolume(a, "5%+");
 	else if (b == Button5)
@@ -1147,18 +1204,16 @@ audioclick(Audio *a, int b, int x, int y)
 }
 
 static int
-nodeclick(Node *nodes, int n, int x, int y)
+pickerclick(Picker *p, Node *nodes, int n, int row, int b, int x, int y)
 {
-	int i;
-
-	for (i = 0; i < n; i++) {
-		if (inrect(nodes[i].row, x, y)) {
-			runid("wpctl set-default %d >/dev/null 2>&1%s", nodes[i].id, "");
-			kick();
-			return 1;
-		}
-	}
-	return 0;
+	if (!inrect(p->row, x, y))
+		return 0;
+	sel = row;
+	if (b == Button4 || (b == Button1 && inrect(p->prev, x, y)))
+		setdefault(nodes, n, -1, row == RIn);
+	else if (b == Button5 || (b == Button1 && inrect(p->next, x, y)))
+		setdefault(nodes, n, 1, row == RIn);
+	return 1;
 }
 
 static int
@@ -1171,6 +1226,7 @@ streamclick(int b, int x, int y)
 
 		if (!inrect(st->label, x, y) && !inrect(st->bar, x, y))
 			continue;
+		sel = RApp + i;
 		if (b == Button4)
 			runid("wpctl set-volume -l 1 %d %s >/dev/null 2>&1", st->id, "5%+");
 		else if (b == Button5)
@@ -1233,11 +1289,11 @@ buttonpress(XButtonEvent *e)
 	}
 	if (sysview)
 		return;
-	if (audioclick(&sink, b, x, y) || audioclick(&source, b, x, y))
+	if (audioclick(&sink, RVol, b, x, y) || audioclick(&source, RMic, b, x, y))
 		return;
 	if (streamclick(b, x, y))
 		return;
-	if (b == Button1 && (nodeclick(sinks, nsinks, x, y) || nodeclick(sources, nsources, x, y)))
+	if (pickerclick(&psink, sinks, nsinks, ROut, b, x, y) || pickerclick(&psource, sources, nsources, RIn, b, x, y))
 		return;
 	if (b == Button1 && inrect(rprev, x, y))
 		month(-1);
@@ -1247,6 +1303,9 @@ buttonpress(XButtonEvent *e)
 		month(-1);
 	else if (b == Button5 && inrect(rcal, x, y))
 		month(1);
+	else
+		return;
+	sel = RCal;
 }
 
 static void
@@ -1305,11 +1364,11 @@ keypress(XKeyEvent *e)
 	switch (k) {
 	case XK_Left:
 	case XK_h:
-		month(-1);
+		adjust(-1);
 		break;
 	case XK_Right:
 	case XK_l:
-		month(1);
+		adjust(1);
 		break;
 	case XK_Home:
 	case XK_t:
@@ -1317,14 +1376,16 @@ keypress(XKeyEvent *e)
 		break;
 	case XK_Up:
 	case XK_k:
-		setvolume(&sink, "5%+");
+		if (sel > RCal)
+			sel--;
 		break;
 	case XK_Down:
 	case XK_j:
-		setvolume(&sink, "5%-");
+		if (sel < RIn + nstreams)
+			sel++;
 		break;
 	case XK_m:
-		togglemute(&sink);
+		mute();
 		break;
 	}
 }

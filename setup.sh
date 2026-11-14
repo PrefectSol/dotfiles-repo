@@ -53,10 +53,11 @@ pacman -Sy
 retry sudo -u "$user" DISTRO_REPO="$out" "$repo/scripts/build-repo.sh"
 retry pacman -Su --noconfirm --needed $(grep -vE '^\s*(#|$)' "$repo/install/packages-local.txt")
 
-if pacman -Qq nvidia-utils &>/dev/null; then
-	log "nvidia video decoding"
-	retry pacman -S --noconfirm --needed libva-nvidia-driver
-fi
+log "yay"
+install_yay "$user"
+
+log "nvidia"
+install_nvidia "$user"
 
 log "locales"
 gen_locales
@@ -66,6 +67,7 @@ mkinitcpio -P
 
 log "bootloader"
 if ((grub)); then
+	"$repo/install/grub-theme.sh" "$repo/theme/grub"
 	grub-mkconfig -o /boot/grub/grub.cfg
 	"$repo/install/grub-theme.sh" "$repo/theme/grub"
 else
@@ -74,9 +76,6 @@ else
 		grep -q fbcon=nodefer "$e" || sed -i -E '/^options/ s/$/ fbcon=nodefer/' "$e"
 	done
 fi
-
-log "yay"
-install_yay "$user"
 
 log "miniforge"
 install_miniforge "$user"

@@ -3,7 +3,8 @@ set -euo pipefail
 src=${1:?usage: grub-theme.sh THEME_DIR}
 t=/usr/share/grub/themes/distro
 read -r step frame top gap label min max < "$src/layout"
-n=$(awk '/^[ \t]*(menuentry|submenu) / { if (!d) n++; if ($0 !~ /}[ \t]*$/) d++; next } /^[ \t]*}[ \t]*$/ { if (d) d-- } END { print n + 0 }' /boot/grub/grub.cfg 2>/dev/null || echo 0)
+n=0
+[[ -f /boot/grub/grub.cfg ]] && n=$(awk '/^[ \t]*(menuentry|submenu) / { if (!d) n++; if ($0 !~ /}[ \t]*$/) d++; next } /^[ \t]*}[ \t]*$/ { if (d) d-- } END { print n + 0 }' /boot/grub/grub.cfg)
 ((n < min)) && n=$min
 ((n > max)) && n=$max
 h=$((n * step + frame))

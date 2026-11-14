@@ -1,6 +1,6 @@
 pkgname=distro-desktop
 pkgver=0.1
-pkgrel=55
+pkgrel=57
 pkgdesc='dwm desktop session'
 arch=(any)
 license=(MIT)
@@ -29,6 +29,7 @@ package() {
   install -Dm644 -t "$pkgdir/etc/skel/.config/yazi" "$f/share/yazi/yazi.toml" "$f/share/yazi/theme.toml" "$f/share/yazi/init.lua" "$f/share/yazi/keymap.toml"
   install -Dm644 -t "$pkgdir/etc/skel/.config/yazi/plugins/center-image.yazi" "$f/share/yazi/plugins/center-image.yazi/main.lua"
   (cd "$f/share/nvim" && find . -type f -exec install -Dm644 {} "$pkgdir/etc/skel/.config/nvim/{}" \;)
+  install -Dm644 "$f/share/nvim-system.lua" "$pkgdir/etc/xdg/nvim/plugin/distro.lua"
   install -Dm644 "$f/share/mime/distro-markdown.xml" "$pkgdir/usr/share/mime/packages/distro-markdown.xml"
   install -Dm644 "$f/share/firefox/policies.json" "$pkgdir/usr/lib/firefox/distribution/policies.json"
   install -Dm644 "$f/share/firefox/autoconfig.js" "$pkgdir/usr/lib/firefox/defaults/pref/autoconfig.js"

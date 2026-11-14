@@ -52,6 +52,39 @@ install_yay() {
 	rm -rf "$tmp"
 }
 
+install_nvidia() {
+	local user=$1 d n id=0 kernels pkgs old
+	for d in /sys/bus/pci/devices/*; do
+		[[ $(<"$d/vendor") == 0x10de && $(<"$d/class") == 0x03* ]] || continue
+		n=$(($(<"$d/device")))
+		((n <= id)) || id=$n
+	done
+	((id)) || return 0
+	mapfile -t kernels < <(cat /usr/lib/modules/*/pkgbase | sort -u)
+	if ((id >= 0x1e00)); then
+		if printf '%s\n' "${kernels[@]}" | grep -qvxE 'linux|linux-lts'; then
+			pkgs=(nvidia-open-dkms "${kernels[@]/%/-headers}")
+		else
+			pkgs=("${kernels[@]/#linux/nvidia-open}")
+		fi
+		pkgs+=(nvidia-utils nvidia-settings libva-nvidia-driver)
+	elif ((id >= 0x1340)); then
+		pkgs=(nvidia-580xx-dkms nvidia-580xx-utils nvidia-580xx-settings libva-nvidia-driver "${kernels[@]/%/-headers}")
+	else
+		log "nvidia card $(printf '%04x' "$id") is not supported by current drivers, skipped"
+		return 0
+	fi
+	old=$(pacman -Qq nvidia-open nvidia-open-lts nvidia-open-dkms nvidia-utils nvidia-settings \
+		nvidia-580xx-dkms nvidia-580xx-utils nvidia-580xx-settings 2>/dev/null | grep -vxFf <(printf '%s\n' "${pkgs[@]}") || true)
+	[[ -z $old ]] || pacman -Rdd --noconfirm $old
+	if ((id >= 0x1e00)); then
+		retry pacman -S --noconfirm --needed "${pkgs[@]}"
+	else
+		retry sudo -u "$user" yay -S --noconfirm --needed "${pkgs[@]}"
+	fi
+	echo 'MODULES+=(nvidia nvidia_modeset nvidia_uvm nvidia_drm)' > /etc/mkinitcpio.conf.d/nvidia.conf
+}
+
 install_miniforge() {
 	local user=$1
 	[[ -d /opt/conda ]] && return
