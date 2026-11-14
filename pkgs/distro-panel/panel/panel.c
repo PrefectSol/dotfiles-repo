@@ -1,4 +1,5 @@
 #include <X11/Xlib.h>
+#include <X11/XKBlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xatom.h>
 #include <X11/keysym.h>
@@ -32,7 +33,8 @@
 #define SETVOL "wpctl set-volume -l " STR(VOLMAX) " "
 
 enum { CBg, CSel, CFg, CFgSel, CDim, CAccent, CHead, COk, CErr, CWarn, CMag, CLast };
-enum { RCal, RVol, ROut, RMic, RIn, RApp };
+enum { RTabs, RCal, RLang, RCaps, ROut, RVol, RIn, RMic, RApp };
+enum { PVitals, PSound, PDatesys, PLast };
 
 typedef struct {
 	int x, y, w, h;
@@ -49,6 +51,10 @@ typedef struct {
 	Rect row, prev, next;
 } Picker;
 
+typedef struct {
+	Rect row, prev, next, item[4];
+} Opts;
+
 static Display *dpy;
 static Window root, win;
 static int screen;
@@ -63,11 +69,15 @@ static char pidpath[256];
 static int calmon, calyear, ticks;
 static Audio sink = { .node = SINK }, source = { .node = SOURCE };
 static Rect rprev, rnext, rcal;
+static Opts otabs;
+static Picker playout, pcase;
+static char langs[4][8];
+static int nlang, xkbev;
 static Picker psink, psource;
 static int sel;
 static unsigned long long cputotal[65], cpuidle[65];
 static int cpupct[65], ncpu;
-static int painting = 1, sysview, bary, closing, replay, stay;
+static int painting = 1, page = PDatesys, bary, closing, replay, rightx, winy;
 static unsigned long long netrx, nettx;
 static double nett, rxrate, txrate;
 
@@ -105,7 +115,7 @@ typedef struct {
 static Poll ready;
 static pthread_mutex_t plock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t pcond = PTHREAD_COND_INITIALIZER;
-static int pfd[2], fresh, kicked, regrab;
+static int pfd[2], fresh, kicked, regrab, shot, shotticks;
 
 static void place(int *x, int *y);
 
@@ -220,11 +230,29 @@ volread(const char *node, float *vol, int *muted)
 }
 
 static void
+medianame(Stream *st)
+{
+	char cmd[64], line[512], *p, *q;
+	FILE *fp;
+
+	snprintf(cmd, sizeof(cmd), "wpctl inspect %d 2>/dev/null", st->id);
+	if (!(fp = popen(cmd, "r")))
+		return;
+	while (fgets(line, sizeof(line), fp))
+		if ((p = strstr(line, "media.name = \"")) && (q = strrchr(p, '"')) > p + 14) {
+			*q = '\0';
+			if (strcmp(p + 14, "AudioStream"))
+				snprintf(st->name, sizeof(st->name), "%s", p + 14);
+		}
+	pclose(fp);
+}
+
+static void
 audiostatus(Poll *d)
 {
-	char line[512], *p, *q, *e;
+	char line[512], dup[sizeof(d->streams) / sizeof(d->streams[0])] = { 0 }, *p, *q, *e;
 	FILE *fp;
-	int section = 0, inaudio = 0, indent, top = -1, i;
+	int section = 0, inaudio = 0, indent, top = -1, i, j;
 	Node *n;
 
 	d->nsinks = d->nsources = d->nstreams = 0;
@@ -301,8 +329,15 @@ audiostatus(Poll *d)
 			n->name[i] = '\0';
 	}
 	pclose(fp);
+	for (i = 0; i < d->nstreams; i++)
+		for (j = i + 1; j < d->nstreams; j++)
+			if (!strcmp(d->streams[i].name, d->streams[j].name))
+				dup[i] = dup[j] = 1;
 	for (i = 0; i < d->nstreams; i++) {
 		char id[16];
+
+		if (dup[i])
+			medianame(&d->streams[i]);
 
 		snprintf(id, sizeof(id), "%d", d->streams[i].id);
 		d->streams[i].valid = volread(id, &d->streams[i].vol, &d->streams[i].muted);
@@ -352,15 +387,13 @@ audioread(Audio *a)
 }
 
 static void
-pollonce(Poll *d)
+pollonce(Poll *d, int gpu)
 {
-	if (sysview)
+	audioread(&d->sink);
+	audioread(&d->source);
+	audiostatus(d);
+	if (gpu)
 		gpuread(d);
-	else {
-		audioread(&d->sink);
-		audioread(&d->source);
-		audiostatus(d);
-	}
 }
 
 static void *
@@ -368,6 +401,7 @@ poller(void *arg)
 {
 	static Poll w;
 	struct timespec ts;
+	int n = 0;
 
 	(void)arg;
 	w.sink.node = SINK;
@@ -377,12 +411,12 @@ poller(void *arg)
 		pthread_mutex_lock(&plock);
 		if (!kicked) {
 			clock_gettime(CLOCK_REALTIME, &ts);
-			ts.tv_sec += sysview ? 2 : 1;
+			ts.tv_sec += 1;
 			pthread_cond_timedwait(&pcond, &plock, &ts);
 		}
 		kicked = 0;
 		pthread_mutex_unlock(&plock);
-		pollonce(&w);
+		pollonce(&w, n++ % 2 == 0);
 		pthread_mutex_lock(&plock);
 		ready = w;
 		fresh = 1;
@@ -546,10 +580,8 @@ static void
 refresh(void)
 {
 	ticks++;
-	if (sysview) {
-		cpusample();
-		netsample();
-	}
+	cpusample();
+	netsample();
 }
 
 static int
@@ -615,6 +647,75 @@ drawheader(int *y)
 }
 
 static void
+drawtabs(int *y)
+{
+	static const char *names[] = { "vitals", "sound", "datesys" };
+	char s[16];
+	int i, w, x = W - pad - cw;
+
+	mark(*y, RTabs);
+	text(x, *y, CDim, ">");
+	otabs.next = (Rect){ x - cw, *y, 3 * cw, lh };
+	x -= 2 * cw;
+	for (i = PLast - 1; i >= 0; i--) {
+		w = textw(names[i]) + 2 * cw;
+		x -= w;
+		snprintf(s, sizeof(s), i == page ? "[%s]" : " %s ", names[i]);
+		text(x, *y, i == page ? CFgSel : CDim, s);
+		otabs.item[i] = (Rect){ x, *y, w, lh };
+		x -= cw;
+	}
+	x -= cw;
+	text(x, *y, CDim, "<");
+	otabs.prev = (Rect){ x - cw, *y, 3 * cw, lh };
+	otabs.row = (Rect){ 0, *y, W, lh };
+	*y += lh;
+	separator(y);
+}
+
+static void
+loadlangs(void)
+{
+	Atom prop = XInternAtom(dpy, "_XKB_RULES_NAMES", False), type;
+	unsigned char *data = NULL;
+	unsigned long items, after;
+	char *p, *s = "us";
+	int fmt, i, len;
+
+	if (XGetWindowProperty(dpy, root, prop, 0, 1024, False, XA_STRING, &type, &fmt, &items, &after, &data) == Success &&
+	    data) {
+		for (p = (char *)data, i = 0; i < 2 && p < (char *)data + items; i++)
+			p += strlen(p) + 1;
+		if (p < (char *)data + items && *p)
+			s = p;
+	}
+	for (nlang = 0; nlang < 4 && *s; nlang++) {
+		len = strcspn(s, ",(");
+		if (len == 2 && (!strncmp(s, "us", 2) || !strncmp(s, "gb", 2)))
+			snprintf(langs[nlang], sizeof(langs[nlang]), "en");
+		else
+			snprintf(langs[nlang], sizeof(langs[nlang]), "%.2s", len >= 2 ? s : "??");
+		s += strcspn(s, ",");
+		if (*s)
+			s++;
+	}
+	if (!nlang)
+		snprintf(langs[nlang++], sizeof(langs[0]), "en");
+	if (data)
+		XFree(data);
+}
+
+static int
+kbstate(int *caps)
+{
+	XkbStateRec st;
+
+	XkbGetState(dpy, XkbUseCoreKbd, &st);
+	*caps = (st.locked_mods & LockMask) != 0;
+	return st.group;
+}
+
+static void
 drawcal(int *y)
 {
 	static const char *months[] = { "january", "february", "march", "april", "may", "june", "july",
@@ -624,7 +725,7 @@ drawcal(int *y)
 	time_t now = time(NULL);
 	struct tm tn = *localtime(&now);
 	char tbuf[48];
-	int i, d, first, days, gx, tw, sw, xs, xr = W - pad;
+	int i, d, first, days, gx, tw, sw, xs;
 
 	t.tm_year = calyear - 1900;
 	t.tm_mon = calmon;
@@ -633,20 +734,21 @@ drawcal(int *y)
 	days = mdays(calyear, calmon);
 	gx = (W - 20 * cw) / 2;
 
-	mark(*y, RCal);
 	text(pad, *y, CHead, "calendar");
+	*y += lh;
+	mark(*y, RCal);
 	snprintf(tbuf, sizeof(tbuf), "%s %d", months[calmon], calyear);
 	tw = textw(tbuf);
 	sw = textw("september 0000");
-	xs = xr - 2 * cw - sw;
-	textr(xr, *y, CDim, ">");
+	xs = W - pad - 2 * cw - sw;
+	text(xs - 2 * cw, *y, CDim, "<");
 	text(xs + (sw - tw) / 2, *y, CFg, tbuf);
-	textr(xs - cw, *y, CDim, "<");
-	rnext = (Rect){ xr - 2 * cw, *y, 3 * cw, lh };
+	text(xs + sw + cw, *y, CDim, ">");
 	rprev = (Rect){ xs - 3 * cw, *y, 3 * cw, lh };
+	rnext = (Rect){ xs + sw, *y, 3 * cw, lh };
+	rcal = (Rect){ 0, *y, W, 8 * lh };
 	*y += lh;
 
-	rcal = (Rect){ 0, *y, W, 7 * lh };
 	for (i = 0; i < 7; i++)
 		text(gx + i * 3 * cw, *y, CDim, wd[i]);
 	*y += lh;
@@ -702,19 +804,17 @@ drawaudio(int *y, Audio *a, const char *label, int row)
 }
 
 static void
-drawpicker(int *y, Node *nodes, int n, const char *label, int row, Picker *p)
+drawchoice(int *y, const char *label, const char *value, int w, int active, int row, Picker *p)
 {
-	char name[128] = "none";
-	int i, x = vcol, xr = W - pad, w = xr - x - 4 * cw;
+	char name[128];
+	int x = vcol, xr = x + w + 4 * cw;
 
 	mark(*y, row);
 	text(pad, *y, row == sel ? CFgSel : CDim, label);
-	for (i = 0; i < n; i++)
-		if (nodes[i].def)
-			snprintf(name, sizeof(name) - 4, "%s", nodes[i].name);
+	snprintf(name, sizeof(name) - 4, "%s", value);
 	fit(name, w);
 	text(x, *y, CDim, "<");
-	text(x + 2 * cw + (w - textw(name)) / 2, *y, n ? CFg : CDim, name);
+	text(x + 2 * cw + (w - textw(name)) / 2, *y, active ? CFg : CDim, name);
 	textr(xr, *y, CDim, ">");
 	p->prev = (Rect){ x - cw, *y, 3 * cw, lh };
 	p->next = (Rect){ xr - 2 * cw, *y, 3 * cw, lh };
@@ -723,15 +823,41 @@ drawpicker(int *y, Node *nodes, int n, const char *label, int row, Picker *p)
 }
 
 static void
+drawpicker(int *y, Node *nodes, int n, const char *label, int row, Picker *p)
+{
+	const char *name = "none";
+	int i;
+
+	for (i = 0; i < n; i++)
+		if (nodes[i].def)
+			name = nodes[i].name;
+	drawchoice(y, label, name, W - pad - vcol - 4 * cw, n > 0, row, p);
+}
+
+static void
+drawlang(int *y)
+{
+	int i, c, g = kbstate(&c), w = textw("abc");
+
+	for (i = 0; i < nlang; i++)
+		if (textw(langs[i]) > w)
+			w = textw(langs[i]);
+	text(pad, *y, CHead, "language");
+	*y += lh;
+	drawchoice(y, "layout", g < nlang ? langs[g] : "??", w, 1, RLang, &playout);
+	drawchoice(y, "case", c ? "ABC" : "abc", w, 1, RCaps, &pcase);
+}
+
+static void
 drawstreams(int *y)
 {
 	char name[96], pct[16];
-	int i, nw = 13 * cw, bx = vcol, bw = W - pad - bx - textw("100%") - cw;
+	int i, nw = 32 * cw, bx = pad + 34 * cw, bw = W - pad - bx - textw("100%") - cw;
 
 	if (!nstreams)
 		return;
 	*y += lh / 2;
-	text(pad, *y, CDim, "apps");
+	text(pad, *y, CDim, "applications");
 	*y += lh;
 	for (i = 0; i < nstreams; i++) {
 		Stream *st = &streams[i];
@@ -934,13 +1060,13 @@ diskrow(int *y, const char *mnt, const char *label)
 }
 
 static int
-layoutsys(void)
+layoutsys(int y)
 {
 	char v[128], a[32], b[32], line[128];
 	unsigned long long mt, ma, st, sf;
 	struct statvfs r, h;
 	struct ifaddrs *ifs, *i;
-	int y = pad, k, cols4, gw, bh = lh / 5 > 4 ? lh / 5 : 4, threads = 0;
+	int k, cols4, gw, bh = lh / 5 > 4 ? lh / 5 : 4, threads = 0;
 	FILE *fp;
 
 	text(pad, y, CHead, "cpu");
@@ -1035,27 +1161,53 @@ layoutsys(void)
 }
 
 static int
+rowok(int r)
+{
+	if (r == RTabs)
+		return 1;
+	if (page == PDatesys)
+		return r >= RCal && r <= RCaps;
+	return page == PSound && r >= ROut && r < RApp + nstreams;
+}
+
+static void
+nextrow(int dir)
+{
+	int r;
+
+	for (r = sel + dir; r >= RTabs && r < RApp + nstreams; r += dir)
+		if (rowok(r)) {
+			sel = r;
+			return;
+		}
+}
+
+static int
 layout(void)
 {
 	int y = pad;
 
-	if (sysview)
-		return layoutsys();
-	if (sel > RIn + nstreams)
-		sel = RIn + nstreams;
-
-	drawheader(&y);
-	drawcal(&y);
-	separator(&y);
-	text(pad, y, CHead, "sound");
-	y += lh;
-	drawaudio(&y, &sink, "volume", RVol);
-	drawpicker(&y, sinks, nsinks, "output", ROut, &psink);
-	drawaudio(&y, &source, "micro", RMic);
-	drawpicker(&y, sources, nsources, "input", RIn, &psource);
-	drawstreams(&y);
-	separator(&y);
-	drawsystem(&y);
+	if (page == PSound && sel >= RApp + nstreams)
+		sel = RApp + nstreams - 1;
+	if (!rowok(sel))
+		sel = RTabs;
+	drawtabs(&y);
+	if (page == PVitals)
+		return layoutsys(y);
+	if (page == PSound) {
+		drawpicker(&y, sinks, nsinks, "output", ROut, &psink);
+		drawaudio(&y, &sink, "volume", RVol);
+		drawpicker(&y, sources, nsources, "input", RIn, &psource);
+		drawaudio(&y, &source, "microphone", RMic);
+		drawstreams(&y);
+	} else {
+		drawheader(&y);
+		drawcal(&y);
+		separator(&y);
+		drawlang(&y);
+		separator(&y);
+		drawsystem(&y);
+	}
 	return y + pad - lh / 2;
 }
 
@@ -1063,7 +1215,7 @@ static void
 resize(int h)
 {
 	H = h;
-	XResizeWindow(dpy, win, W, H);
+	XMoveResizeWindow(dpy, win, rightx - W, winy, W, H);
 	XftDrawDestroy(xd);
 	XFreePixmap(dpy, buf);
 	buf = XCreatePixmap(dpy, win, W, H, DefaultDepth(dpy, screen));
@@ -1073,12 +1225,14 @@ resize(int h)
 static void
 draw(void)
 {
-	int h;
+	int w = pagecols[page] * cw + 2 * pad, h, ow = W;
 
+	W = w;
+	vcol = pad + (page == PVitals ? 10 : 14) * cw;
 	painting = 0;
 	h = layout();
 	painting = 1;
-	if (h != H)
+	if (h != H || w != ow)
 		resize(h);
 	fill(0, 0, W, H, CAccent);
 	fill(border, border, W - 2 * border, H - 2 * border, CBg);
@@ -1161,13 +1315,44 @@ setdefault(Node *nodes, int n, int delta, int capture)
 }
 
 static void
+setpage(int p)
+{
+	page = (p + PLast) % PLast;
+	sel = RTabs;
+}
+
+static void
+setgroup(int g)
+{
+	XkbLockGroup(dpy, XkbUseCoreKbd, g);
+	XSync(dpy, False);
+}
+
+static void
+setcaps(int on)
+{
+	XkbLockModifiers(dpy, XkbUseCoreKbd, LockMask, on ? LockMask : 0);
+	XSync(dpy, False);
+}
+
+static void
 adjust(int delta)
 {
 	const char *arg = delta > 0 ? "5%+" : "5%-";
+	int c, g = kbstate(&c);
 
 	switch (sel) {
+	case RTabs:
+		setpage(page + delta);
+		break;
 	case RCal:
 		month(delta);
+		break;
+	case RLang:
+		setgroup((g + delta + nlang) % nlang);
+		break;
+	case RCaps:
+		setcaps(!c);
 		break;
 	case RVol:
 		setvolume(&sink, arg);
@@ -1190,8 +1375,10 @@ adjust(int delta)
 static void
 mute(void)
 {
+	if (sel < ROut)
+		return;
 	if (sel < RApp) {
-		togglemute(sel >= RMic ? &source : &sink);
+		togglemute(sel >= RIn ? &source : &sink);
 		return;
 	}
 	runid("wpctl set-mute %d %s >/dev/null 2>&1", streams[sel - RApp].id, "toggle");
@@ -1218,15 +1405,25 @@ audioclick(Audio *a, int row, int b, int x, int y)
 }
 
 static int
+choicedelta(Picker *p, int b, int x, int y)
+{
+	if (b == Button4 || (b == Button1 && inrect(p->prev, x, y)))
+		return -1;
+	if (b == Button5 || (b == Button1 && inrect(p->next, x, y)))
+		return 1;
+	return 0;
+}
+
+static int
 pickerclick(Picker *p, Node *nodes, int n, int row, int b, int x, int y)
 {
+	int d;
+
 	if (!inrect(p->row, x, y))
 		return 0;
 	sel = row;
-	if (b == Button4 || (b == Button1 && inrect(p->prev, x, y)))
-		setdefault(nodes, n, -1, row == RIn);
-	else if (b == Button5 || (b == Button1 && inrect(p->next, x, y)))
-		setdefault(nodes, n, 1, row == RIn);
+	if ((d = choicedelta(p, b, x, y)))
+		setdefault(nodes, n, d, row == RIn);
 	return 1;
 }
 
@@ -1259,56 +1456,74 @@ streamclick(int b, int x, int y)
 }
 
 static int
-blockview(int x, int y)
+statusarea(int x, int y)
 {
 	Atom prop = XInternAtom(dpy, "_DWM_BLOCKS", False), type;
-	unsigned long n, after, i, k;
+	unsigned long n, after, i;
 	unsigned char *data = NULL;
-	int fmt, view = -1;
+	int fmt, hit = 0;
 	long *v;
 
 	if (y >= bary || XGetWindowProperty(dpy, root, prop, 0, 96, False, XA_CARDINAL, &type, &fmt,
 	                                    &n, &after, &data) != Success || !data)
-		return -1;
+		return 0;
 	v = (long *)data;
+	if (n >= 3)
+		hit = x >= v[0] && x < v[n - 3] + v[n - 2];
 	for (i = 0; i + 2 < n; i += 3)
-		if (x >= v[i] && x < v[i] + v[i + 1]) {
-			for (k = 0; k < sizeof(datesigs) / sizeof(*datesigs); k++)
-				if (v[i + 2] == datesigs[k])
-					view = 0;
-			for (k = 0; k < sizeof(syssigs) / sizeof(*syssigs); k++)
-				if (v[i + 2] == syssigs[k])
-					view = 1;
-		}
+		hit |= x >= v[i] && x < v[i] + v[i + 1];
 	XFree(data);
-	return view;
+	return hit;
+}
+
+static int
+optclick(Opts *o, int n, int cur, int b, int x, int y)
+{
+	int i;
+
+	if (!inrect(o->row, x, y))
+		return -1;
+	if (b == Button4 || (b == Button1 && inrect(o->prev, x, y)))
+		return (cur + n - 1) % n;
+	if (b == Button5 || (b == Button1 && inrect(o->next, x, y)))
+		return (cur + 1) % n;
+	for (i = 0; b == Button1 && i < n; i++)
+		if (inrect(o->item[i], x, y))
+			return i;
+	return cur;
 }
 
 static void
 buttonpress(XButtonEvent *e)
 {
-	int x = e->x, y = e->y, b = e->button;
+	int x = e->x, y = e->y, b = e->button, i;
 
 	if (x < 0 || y < 0 || x >= W || y >= H) {
-		if (b <= Button3) {
-			int v = blockview(e->x_root, e->y_root);
-
-			if (v == sysview)
-				return;
+		if (b <= Button3 && !statusarea(e->x_root, e->y_root)) {
 			closing = b;
 			replay = e->y_root < bary;
-			stay = v >= 0;
 		}
 		return;
 	}
-	if (sysview)
+	if ((i = optclick(&otabs, PLast, page, b, x, y)) >= 0) {
+		setpage(i);
 		return;
-	if (audioclick(&sink, RVol, b, x, y) || audioclick(&source, RMic, b, x, y))
+	}
+	if (page == PVitals)
 		return;
-	if (streamclick(b, x, y))
+	if (page == PSound) {
+		if (audioclick(&sink, RVol, b, x, y) || audioclick(&source, RMic, b, x, y) || streamclick(b, x, y))
+			return;
+		if (!pickerclick(&psink, sinks, nsinks, ROut, b, x, y))
+			pickerclick(&psource, sources, nsources, RIn, b, x, y);
 		return;
-	if (pickerclick(&psink, sinks, nsinks, ROut, b, x, y) || pickerclick(&psource, sources, nsources, RIn, b, x, y))
+	}
+	if (inrect(playout.row, x, y) || inrect(pcase.row, x, y)) {
+		sel = inrect(playout.row, x, y) ? RLang : RCaps;
+		if ((i = choicedelta(sel == RLang ? &playout : &pcase, b, x, y)))
+			adjust(i);
 		return;
+	}
 	if (b == Button1 && inrect(rprev, x, y))
 		month(-1);
 	else if (b == Button1 && inrect(rnext, x, y))
@@ -1322,20 +1537,35 @@ buttonpress(XButtonEvent *e)
 	sel = RCal;
 }
 
-static void
-switchview(void)
+static int
+xerror(Display *d, XErrorEvent *e)
 {
-	pid_t pid;
+	(void)d;
+	(void)e;
+	return 0;
+}
 
-	if ((pid = fork()) == 0) {
-		if (fork() == 0) {
-			setsid();
-			execlp("distro-panel", "distro-panel", sysview ? NULL : "sys", (char *)NULL);
-		}
-		_exit(0);
+static int
+shotwindow(void)
+{
+	Window r, p, *c = NULL;
+	XWindowAttributes a;
+	XClassHint h;
+	unsigned int n, i;
+	int found = 0;
+
+	if (!XQueryTree(dpy, DefaultRootWindow(dpy), &r, &p, &c, &n))
+		return 0;
+	for (i = 0; i < n && !found; i++) {
+		if (!XGetWindowAttributes(dpy, c[i], &a) || a.map_state != IsViewable || !XGetClassHint(dpy, c[i], &h))
+			continue;
+		found = h.res_class && !strcmp(h.res_class, shotclass);
+		XFree(h.res_name);
+		XFree(h.res_class);
 	}
-	if (pid > 0)
-		waitpid(pid, NULL, 0);
+	if (c)
+		XFree(c);
+	return found;
 }
 
 static void
@@ -1360,12 +1590,20 @@ keypress(XKeyEvent *e)
 		passkey(e, 0);
 		return;
 	}
+	if (k == XK_Print) {
+		XUngrabPointer(dpy, CurrentTime);
+		passkey(e, 0);
+		regrab = 0;
+		shot = 1;
+		shotticks = 0;
+		return;
+	}
 	if (e->state & Mod4Mask) {
-		if ((k == syskey && !sysview) || (k == datekey && sysview))
-			switchview();
+		if (k == panelkey)
+			running = 0;
 		else if (k >= XK_F1 && k <= XK_F12)
 			passkey(e, 0);
-		else if (k != syskey && k != datekey && !IsModifierKey(k))
+		else if (!IsModifierKey(k))
 			passkey(e, 1);
 		return;
 	}
@@ -1373,8 +1611,6 @@ keypress(XKeyEvent *e)
 		running = 0;
 		return;
 	}
-	if (sysview)
-		return;
 	switch (k) {
 	case XK_Left:
 	case XK_h:
@@ -1386,17 +1622,16 @@ keypress(XKeyEvent *e)
 		break;
 	case XK_Home:
 	case XK_t:
-		today();
+		if (page == PDatesys)
+			today();
 		break;
 	case XK_Up:
 	case XK_k:
-		if (sel > RCal)
-			sel--;
+		nextrow(-1);
 		break;
 	case XK_Down:
 	case XK_j:
-		if (sel < RIn + nstreams)
-			sel++;
+		nextrow(1);
 		break;
 	case XK_m:
 		mute();
@@ -1423,42 +1658,39 @@ grab(void)
 	}
 }
 
-static int
+static void
 toggle(void)
 {
 	const char *dir = getenv("XDG_RUNTIME_DIR");
 	char comm[32] = "", path[64];
 	FILE *fp;
-	int pid = 0, view = -1;
+	int pid = 0;
 
 	snprintf(pidpath, sizeof(pidpath), "%s/distro-panel.pid", dir ? dir : "/tmp");
 	if (!(fp = fopen(pidpath, "r")))
-		return 0;
-	if (fscanf(fp, "%d %d", &pid, &view) < 1)
+		return;
+	if (fscanf(fp, "%d", &pid) != 1)
 		pid = 0;
 	fclose(fp);
 	snprintf(path, sizeof(path), "/proc/%d/comm", pid);
 	if (pid <= 0 || pid == getpid() || !(fp = fopen(path, "r")))
-		return 0;
+		return;
 	if (!fgets(comm, sizeof(comm), fp))
 		comm[0] = '\0';
 	fclose(fp);
 	if (strncmp(comm, "distro-panel", 12))
-		return 0;
-	if (view == sysview)
-		exit(0);
-	return pid;
+		return;
+	kill(pid, SIGTERM);
+	exit(0);
 }
 
 static void
-claim(int old)
+claim(void)
 {
 	FILE *fp;
 
-	if (old > 0)
-		kill(old, SIGTERM);
 	if ((fp = fopen(pidpath, "w"))) {
-		fprintf(fp, "%d %d\n", getpid(), sysview);
+		fprintf(fp, "%d\n", getpid());
 		fclose(fp);
 	}
 }
@@ -1491,10 +1723,12 @@ place(int *x, int *y)
 	*x = mx + mw - W - gap;
 	*y = my + font->ascent + font->descent + barpad + 2 * gap;
 	bary = *y - gap;
+	rightx = mx + mw - gap;
+	winy = *y;
 }
 
 int
-main(int argc, char *argv[])
+main(void)
 {
 	XSetWindowAttributes wa;
 	XClassHint ch = { "distro-panel", "distro-panel" };
@@ -1503,7 +1737,7 @@ main(int argc, char *argv[])
 	XEvent ev;
 	fd_set fds;
 	FILE *fp;
-	int i, x, y, fd, depth, old;
+	int i, x, y, fd, depth;
 	sigset_t mask;
 	pthread_t thread;
 	struct timespec now;
@@ -1511,10 +1745,10 @@ main(int argc, char *argv[])
 
 	sigemptyset(&mask);
 	sigprocmask(SIG_SETMASK, &mask, NULL);
-	sysview = argc > 1 && !strcmp(argv[1], "sys");
-	old = toggle();
+	toggle();
 	if (!(dpy = XOpenDisplay(NULL)))
 		die("cannot open display");
+	XSetErrorHandler(xerror);
 	screen = DefaultScreen(dpy);
 	root = RootWindow(dpy, screen);
 	vis = DefaultVisual(dpy, screen);
@@ -1533,14 +1767,23 @@ main(int argc, char *argv[])
 		XftTextExtentsUtf8(dpy, font, (const FcChar8 *)"x", 1, &gx);
 		tshift = (gh.y - gx.y) / 2;
 	}
+	{
+		int op, err, maj = XkbMajorVersion, min = XkbMinorVersion;
+
+		if (XkbQueryExtension(dpy, &op, &xkbev, &err, &maj, &min))
+			XkbSelectEventDetails(dpy, XkbUseCoreKbd, XkbStateNotify, XkbAllStateComponentsMask,
+			                      XkbGroupLockMask | XkbModifierLockMask);
+		else
+			xkbev = -1;
+	}
+	loadlangs();
 	cw = textw("0");
 	lh = font->ascent + font->descent + 8;
 	pad = 2 * cw;
-	vcol = pad + (sysview ? 10 : 14) * cw;
-	W = cols * cw + 2 * pad;
+	vcol = pad + 14 * cw;
+	W = pagecols[page] * cw + 2 * pad;
 	today();
-	if (sysview)
-		seed();
+	seed();
 	refresh();
 	if (pipe(pfd) < 0)
 		die("cannot create pipe");
@@ -1549,7 +1792,7 @@ main(int argc, char *argv[])
 	ready.sink.node = SINK;
 	ready.source.node = SOURCE;
 	ready.gpuutil = -1;
-	pollonce(&ready);
+	pollonce(&ready, 0);
 	fresh = 1;
 	publish();
 
@@ -1573,10 +1816,11 @@ main(int argc, char *argv[])
 	draw();
 	XMapRaised(dpy, win);
 	XSync(dpy, False);
-	claim(old);
+	claim();
 	grab();
 	if (pthread_create(&thread, NULL, poller, NULL))
 		die("cannot start poller");
+	kick();
 
 	fd = ConnectionNumber(dpy);
 	clock_gettime(CLOCK_REALTIME, &now);
@@ -1601,7 +1845,7 @@ main(int argc, char *argv[])
 			else if (ev.type == ButtonRelease && closing && ev.xbutton.button == (unsigned)closing) {
 				int b = closing;
 
-				running = stay;
+				running = 0;
 				closing = 0;
 				if (replay) {
 					XUngrabPointer(dpy, CurrentTime);
@@ -1610,7 +1854,7 @@ main(int argc, char *argv[])
 					XSync(dpy, False);
 				}
 				continue;
-			} else
+			} else if (ev.type != xkbev)
 				continue;
 			if (running && ev.type != Expose)
 				draw();
@@ -1621,6 +1865,14 @@ main(int argc, char *argv[])
 			regrab = 0;
 			kick();
 		}
+		if (shot) {
+			if (shotwindow())
+				shot = 2;
+			else if (shot == 2 || ++shotticks > 60) {
+				shot = 0;
+				grab();
+			}
+		}
 		clock_gettime(CLOCK_REALTIME, &now);
 		if (now.tv_sec != tick) {
 			tick = now.tv_sec;
@@ -1628,7 +1880,7 @@ main(int argc, char *argv[])
 			draw();
 		}
 		tv.tv_sec = 0;
-		tv.tv_usec = regrab ? 50000 : 1000000 - now.tv_nsec / 1000;
+		tv.tv_usec = regrab || shot ? 50000 : 1000000 - now.tv_nsec / 1000;
 		FD_ZERO(&fds);
 		FD_SET(fd, &fds);
 		FD_SET(pfd[0], &fds);

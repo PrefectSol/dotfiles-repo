@@ -13,6 +13,7 @@ static const int border        = 2;
 static const int maxwidth      = 1280;
 static const int promptchars   = 9;
 static const float previewfrac = 0.4;
+static const char *shotclass   = "flameshot";
 #include "colors.h"
 /* -l option; if nonzero, dmenu uses vertical list with given number of lines */
 static unsigned int lines      = 0;

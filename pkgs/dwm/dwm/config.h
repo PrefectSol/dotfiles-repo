@@ -47,8 +47,7 @@ static const char *dmenucmd[]   = { "distro-run", "-m", dmenumon, NULL };
 static const char *termcmd[]    = { "st", NULL };
 static const char *logoutcmd[]  = { "distro-logout", NULL };
 static const char *clipcmd[]    = { "distro-clip", NULL };
-static const char *datecmd[]    = { "distro-panel", NULL };
-static const char *syscmd[]     = { "distro-panel", "sys", NULL };
+static const char *panelcmd[]   = { "distro-panel", NULL };
 static const char *shotcmd[]    = { "flameshot", "gui", NULL };
 static const char *notifclose[] = { "dunstctl", "close-all", NULL };
 static const char *notifhist[]  = { "dunstctl", "history-pop", NULL };
@@ -61,8 +60,6 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_space,                 spawn,          {.v = dmenucmd } },
 	{ MODKEY,                       XK_Return,                spawn,          {.v = termcmd } },
 	{ MODKEY,                       XK_v,                     spawn,          {.v = clipcmd } },
-	{ MODKEY,                       XK_s,                     spawn,          {.v = syscmd } },
-	{ MODKEY,                       XK_d,                     spawn,          {.v = datecmd } },
 	{ MODKEY,                       XK_l,                     spawn,          {.v = logoutcmd } },
 	{ 0,                            XK_Print,                 spawn,          {.v = shotcmd } },
 	{ MODKEY,                       XK_n,                     spawn,          {.v = notifclose } },
@@ -76,7 +73,7 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_b,                     togglebar,      {0} },
 	{ MODKEY,                       XK_j,                     focusstack,     {.i = +1 } },
 	{ MODKEY,                       XK_k,                     focusstack,     {.i = -1 } },
-	{ MODKEY,                       XK_Tab,                   view,           {0} },
+	{ MODKEY,                       XK_Tab,                   spawn,          {.v = panelcmd } },
 	{ MODKEY,                       XK_q,                     killclient,     {0} },
 	{ MODKEY,                       XK_t,                     setlayout,      {.v = &layouts[0]} },
 	{ MODKEY,                       XK_w,                     setlayout,      {.v = &layouts[1]} },
@@ -96,11 +93,8 @@ static const Key keys[] = {
 static const Button buttons[] = {
 	/* click                event mask      button          function        argument */
 	{ ClkLtSymbol,          0,              Button1,        setlayout,      {0} },
-	{ ClkStatusText,        0,              Button1,        sigstatusbar,   {.i = 1} },
-	{ ClkStatusText,        0,              Button2,        sigstatusbar,   {.i = 2} },
-	{ ClkStatusText,        0,              Button3,        sigstatusbar,   {.i = 3} },
-	{ ClkStatusText,        0,              Button4,        sigstatusbar,   {.i = 4} },
-	{ ClkStatusText,        0,              Button5,        sigstatusbar,   {.i = 5} },
+	{ ClkStatusText,        0,              Button1,        spawn,          {.v = panelcmd } },
+	{ ClkStatusText,        0,              Button3,        spawn,          {.v = panelcmd } },
 	{ ClkClientWin,         MODKEY,         Button1,        movemouse,      {0} },
 	{ ClkClientWin,         MODKEY,         Button2,        togglefloating, {0} },
 	{ ClkClientWin,         MODKEY,         Button3,        resizemouse,    {0} },

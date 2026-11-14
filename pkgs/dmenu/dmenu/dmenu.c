@@ -467,6 +467,37 @@ movewordedge(int dir)
 	}
 }
 
+static int
+xerror(Display *d, XErrorEvent *e)
+{
+	(void)d;
+	(void)e;
+	return 0;
+}
+
+static int
+shotwindow(void)
+{
+	Window r, p, *c = NULL;
+	XWindowAttributes a;
+	XClassHint h;
+	unsigned int n, i;
+	int found = 0;
+
+	if (!XQueryTree(dpy, DefaultRootWindow(dpy), &r, &p, &c, &n))
+		return 0;
+	for (i = 0; i < n && !found; i++) {
+		if (!XGetWindowAttributes(dpy, c[i], &a) || a.map_state != IsViewable || !XGetClassHint(dpy, c[i], &h))
+			continue;
+		found = h.res_class && !strcmp(h.res_class, shotclass);
+		XFree(h.res_name);
+		XFree(h.res_class);
+	}
+	if (c)
+		XFree(c);
+	return found;
+}
+
 static void
 passkey(XKeyEvent *ev)
 {
@@ -474,6 +505,21 @@ passkey(XKeyEvent *ev)
 	XTestFakeKeyEvent(dpy, ev->keycode, False, CurrentTime);
 	XTestFakeKeyEvent(dpy, ev->keycode, True, CurrentTime);
 	XSync(dpy, False);
+}
+
+static void
+shotwait(void)
+{
+	struct timespec ts = { .tv_sec = 0, .tv_nsec = 50000000 };
+	int i, seen = 0;
+
+	for (i = 0; i < 60 || seen; i++) {
+		if (shotwindow())
+			seen = 1;
+		else if (seen)
+			break;
+		nanosleep(&ts, NULL);
+	}
 }
 
 static void
@@ -535,6 +581,13 @@ keypress(XKeyEvent *ev)
 	if ((ksym >= 0x1008ff00 && ksym <= 0x1008ffff) || (ev->state & Mod4Mask && ksym >= XK_F1 && ksym <= XK_F12)) {
 		passkey(ev);
 		regrab();
+		return;
+	}
+	if (ksym == XK_Print) {
+		passkey(ev);
+		shotwait();
+		regrab();
+		drawmenu();
 		return;
 	}
 	if (ev->state & Mod4Mask) {
@@ -1008,6 +1061,7 @@ main(int argc, char *argv[])
 		fputs("warning: no locale support\n", stderr);
 	if (!(dpy = XOpenDisplay(NULL)))
 		die("cannot open display");
+	XSetErrorHandler(xerror);
 	screen = DefaultScreen(dpy);
 	root = RootWindow(dpy, screen);
 	if (!embed || !(parentwin = strtol(embed, NULL, 0)))

@@ -1,10 +1,7 @@
 #include <dirent.h>
-#include <fcntl.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -108,33 +105,10 @@ human(char *b, size_t n, double v)
 	snprintf(b, n, "%s%s", num, u[i]);
 }
 
-static void
-openpanel(void)
-{
-	pid_t pid;
-
-	if ((pid = fork()) == 0) {
-		setsid();
-		if (fork() == 0) {
-			int fd = open("/dev/null", O_RDWR);
-
-			if (fd >= 0) {
-				dup2(fd, 0);
-				dup2(fd, 1);
-				dup2(fd, 2);
-			}
-			execlp("distro-panel", "distro-panel", "sys", (char *)NULL);
-		}
-		_exit(0);
-	}
-	if (pid > 0)
-		waitpid(pid, NULL, 0);
-}
-
 int
 main(int argc, char *argv[])
 {
-	const char *btn = getenv("BLOCK_BUTTON"), *dir = getenv("XDG_RUNTIME_DIR");
+	const char *dir = getenv("XDG_RUNTIME_DIR");
 	const char *what = argc > 1 ? argv[1] : "mem";
 	unsigned long long a, b, pa = 0, pb = 0;
 	double t = now(), pt = 0, dt;
@@ -142,8 +116,6 @@ main(int argc, char *argv[])
 	int have = 0, pct = 0;
 	FILE *fp;
 
-	if (btn && (!strcmp(btn, "1") || !strcmp(btn, "3")))
-		openpanel();
 	if (!strcmp(what, "mem")) {
 		printf("mem: %3d%%\n", mem());
 		return 0;

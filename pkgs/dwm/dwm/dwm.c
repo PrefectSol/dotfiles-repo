@@ -210,7 +210,6 @@ static void setfocus(Client *c);
 static void setfullscreen(Client *c, int fullscreen);
 static void setlayout(const Arg *arg);
 static void setup(void);
-static void sigstatusbar(const Arg *arg);
 static void seturgent(Client *c, int urg);
 static void showhide(Client *c);
 static void spawn(const Arg *arg);
@@ -247,11 +246,9 @@ static int xerrorstart(Display *dpy, XErrorEvent *ee);
 /* variables */
 static const char broken[] = "broken";
 static char rawstext[256];
-static int statussig;
 static int statusw;
 static struct { int x, w, sig; } blocks[16];
 static int nblocks;
-static pid_t statuspid = -1;
 static int screen;
 static int sw, sh;           /* X display screen geometry width, height */
 static int bh;               /* bar height */
@@ -400,7 +397,6 @@ void
 buttonpress(XEvent *e)
 {
 	unsigned int i, x, click;
-	int j;
 	Arg arg = {0};
 	Client *c;
 	Monitor *m;
@@ -422,13 +418,9 @@ buttonpress(XEvent *e)
 			arg.ui = 1 << i;
 		} else if (ev->x < x + TEXTW(selmon->ltsymbol))
 			click = ClkLtSymbol;
-		else if (ev->x >= selmon->barw - statusw) {
+		else if (ev->x >= selmon->barw - statusw)
 			click = ClkStatusText;
-			statussig = 0;
-			for (j = 0; j < nblocks; j++)
-				if (ev->x >= blocks[j].x && ev->x < blocks[j].x + blocks[j].w)
-					statussig = blocks[j].sig;
-		} else
+		else
 			click = ClkWinTitle;
 	} else if ((c = wintoclient(ev->window))) {
 		focus(c);
@@ -2007,42 +1999,7 @@ setlayout(const Arg *arg)
 		drawbar(selmon);
 }
 
-static pid_t
-getstatusbarpid(void)
-{
-	char buf[64], *str = buf, *c;
-	FILE *fp;
-
-	if (statuspid > 0) {
-		snprintf(buf, sizeof(buf), "/proc/%d/comm", statuspid);
-		if ((fp = fopen(buf, "r"))) {
-			if (fgets(buf, sizeof(buf), fp) && (c = strchr(str, '\n')))
-				*c = '\0';
-			fclose(fp);
-			if (!strcmp(str, "dwmblocks"))
-				return statuspid;
-		}
-	}
-	if (!(fp = popen("pidof -s dwmblocks", "r")))
-		return -1;
-	if (!fgets(buf, sizeof(buf), fp))
-		buf[0] = '\0';
-	pclose(fp);
-	return strtol(buf, NULL, 10);
-}
-
-void
-sigstatusbar(const Arg *arg)
-{
-	union sigval sv;
-
-	if (!statussig || (statuspid = getstatusbarpid()) <= 0)
-		return;
-	sv.sival_int = arg->i;
-	sigqueue(statuspid, SIGRTMIN + statussig, sv);
-}
-
-void
+static void
 setup(void)
 {
 	int i;

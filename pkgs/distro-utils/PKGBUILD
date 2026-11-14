@@ -1,6 +1,6 @@
 pkgname=distro-utils
 pkgver=0.1
-pkgrel=9
+pkgrel=11
 pkgdesc='Small X11 helpers for the desktop'
 arch=(x86_64)
 license=(MIT)
