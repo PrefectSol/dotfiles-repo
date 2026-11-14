@@ -1,5 +1,0 @@
-@-moz-document regexp("(?!chrome:).*") {
-	html:root {
-		background-color: light-dark(#ffffff, #15161e);
-	}
-}

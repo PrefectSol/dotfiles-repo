@@ -1,6 +1,6 @@
 pkgname=distro-desktop
 pkgver=0.1
-pkgrel=59
+pkgrel=61
 pkgdesc='dwm desktop session'
 arch=(any)
 license=(MIT)
@@ -34,7 +34,8 @@ package() {
   install -Dm644 "$f/share/firefox/policies.json" "$pkgdir/usr/lib/firefox/distribution/policies.json"
   install -Dm644 "$f/share/firefox/autoconfig.js" "$pkgdir/usr/lib/firefox/defaults/pref/autoconfig.js"
   install -Dm644 "$f/share/firefox/distro.cfg" "$pkgdir/usr/lib/firefox/distro.cfg"
-  install -Dm644 -t "$pkgdir/usr/share/distro/firefox" "$f/share/firefox/chrome.css" "$f/share/firefox/agent.css" "$f/share/firefox/content.css" "$f/share/firefox/newtab.html"
+  install -Dm644 -t "$pkgdir/usr/share/distro/firefox" "$f/share/firefox/chrome.css" "$f/share/firefox/agent.css" "$f/share/firefox/frame.js" "$f/share/firefox/newtab.html"
+  install -Dm644 "$f/share/flameshot.ini" "$pkgdir/etc/xdg/flameshot/flameshot.ini"
   install -Dm644 "$f/share/gtk/settings3.ini" "$pkgdir/etc/xdg/gtk-3.0/settings.ini"
   install -Dm644 "$f/share/gtk/settings4.ini" "$pkgdir/etc/xdg/gtk-4.0/settings.ini"
   install -Dm644 "$f/share/dconf/profile" "$pkgdir/etc/dconf/profile/user"

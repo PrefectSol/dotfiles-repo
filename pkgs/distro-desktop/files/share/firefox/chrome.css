@@ -214,16 +214,18 @@
 		visibility: visible !important;
 	}
 	.tabbrowser-tab .tab-close-button:hover {
-		background: var(--d-sel) !important;
+		background: #ff757f !important;
+		color: var(--d-bg) !important;
 	}
 	#tabs-newtab-button, #vertical-tabs-newtab-button {
 		margin: 0 !important;
-		padding: 0 !important;
+		padding-block: 0 !important;
+		padding-inline: 14px 8px !important;
 		min-height: 36px !important;
 		border-radius: 0 !important;
 	}
 	#tabs-newtab-button > .toolbarbutton-icon, #vertical-tabs-newtab-button > .toolbarbutton-icon {
-		margin-inline-start: 6px !important;
+		margin: 0 !important;
 		width: 16px !important;
 		height: 16px !important;
 		padding: 0 !important;
@@ -233,6 +235,8 @@
 	#tabs-newtab-button > .toolbarbutton-text, #vertical-tabs-newtab-button > .toolbarbutton-text {
 		font: 15px monospace !important;
 		color: var(--d-dim) !important;
+		margin: 0 !important;
+		padding-inline: 18px 0 !important;
 	}
 	#tabs-newtab-button:hover, #vertical-tabs-newtab-button:hover {
 		background: var(--d-hover) !important;

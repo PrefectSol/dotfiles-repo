@@ -1,6 +1,6 @@
 #!/bin/bash
 shopt -s nullglob nocaseglob
-dirs=("$HOME/Pictures/wallpapers" /usr/share/backgrounds/distro)
+dirs=("$HOME/pictures/wallpapers" /usr/share/backgrounds/distro)
 files=()
 for dir in "${dirs[@]}"; do
 	files=("$dir"/*.{png,jpg,jpeg})
