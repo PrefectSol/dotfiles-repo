@@ -1,3 +1,4 @@
+#define VOLMAX 1.5
 static const char *fontname = "monospace:size=12";
 static const int cols = 40;
 static const int gap = 5;

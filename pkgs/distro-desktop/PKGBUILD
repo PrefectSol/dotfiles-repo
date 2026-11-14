@@ -1,6 +1,6 @@
 pkgname=distro-desktop
 pkgver=0.1
-pkgrel=57
+pkgrel=58
 pkgdesc='dwm desktop session'
 arch=(any)
 license=(MIT)

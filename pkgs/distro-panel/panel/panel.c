@@ -27,6 +27,9 @@
 
 #define SINK "@DEFAULT_AUDIO_SINK@"
 #define SOURCE "@DEFAULT_AUDIO_SOURCE@"
+#define STR_(x) #x
+#define STR(x) STR_(x)
+#define SETVOL "wpctl set-volume -l " STR(VOLMAX) " "
 
 enum { CBg, CSel, CFg, CFgSel, CDim, CAccent, CHead, COk, CErr, CWarn, CMag, CLast };
 enum { RCal, RVol, ROut, RMic, RIn, RApp };
@@ -663,18 +666,32 @@ drawcal(int *y)
 }
 
 static void
+volbar(int x, int y, int w, float vol, int muted)
+{
+	int h = lh / 5 > 4 ? lh / 5 : 4, one = (int)(w / VOLMAX + 0.5);
+	float v = vol > VOLMAX ? VOLMAX : vol;
+
+	y += (lh - h) / 2;
+	fill(x, y, w, h, CSel);
+	fill(x, y, (int)((v > 1 ? 1 : v) * one + 0.5), h, muted ? CDim : CAccent);
+	if (v > 1)
+		fill(x + one, y, (int)((v - 1) * one + 0.5), h, muted ? CDim : CWarn);
+	else
+		fill(x + one, y, 1, h, CDim);
+}
+
+static void
 drawaudio(int *y, Audio *a, const char *label, int row)
 {
 	char pct[16];
-	int bx = vcol, bw = W - pad - bx - textw("100%") - cw, bh = lh / 5 > 4 ? lh / 5 : 4;
+	int bx = vcol, bw = W - pad - bx - textw("100%") - cw;
 
 	mark(*y, row);
 	text(pad, *y, row == sel ? CFgSel : CDim, label);
 	a->label = (Rect){ 0, *y, bx, lh };
 	a->bar = (Rect){ 0 };
 	if (a->valid) {
-		fill(bx, *y + (lh - bh) / 2, bw, bh, CSel);
-		fill(bx, *y + (lh - bh) / 2, (int)(bw * (a->vol > 1 ? 1 : a->vol) + 0.5), bh, a->muted ? CDim : CAccent);
+		volbar(bx, *y, bw, a->vol, a->muted);
 		snprintf(pct, sizeof(pct), "%d%%", (int)(a->vol * 100 + 0.5));
 		textr(W - pad, *y, a->muted ? CDim : CFg, a->muted ? "mute" : pct);
 		a->bar = (Rect){ bx, *y, bw, lh };
@@ -709,7 +726,7 @@ static void
 drawstreams(int *y)
 {
 	char name[96], pct[16];
-	int i, nw = 13 * cw, bx = vcol, bw = W - pad - bx - textw("100%") - cw, bh = lh / 5 > 4 ? lh / 5 : 4;
+	int i, nw = 13 * cw, bx = vcol, bw = W - pad - bx - textw("100%") - cw;
 
 	if (!nstreams)
 		return;
@@ -723,11 +740,8 @@ drawstreams(int *y)
 		fit(name, nw);
 		mark(*y, RApp + i);
 		text(pad + cw, *y, RApp + i == sel ? CFgSel : st->muted ? CDim : CFg, name);
-		fill(bx, *y + (lh - bh) / 2, bw, bh, CSel);
+		volbar(bx, *y, bw, st->valid ? st->vol : 0, st->muted);
 		if (st->valid) {
-			float v = st->vol > 1 ? 1 : st->vol;
-
-			fill(bx, *y + (lh - bh) / 2, (int)(bw * v + 0.5), bh, st->muted ? CDim : CAccent);
 			snprintf(pct, sizeof(pct), "%d%%", (int)(st->vol * 100 + 0.5));
 			textr(W - pad, *y, st->muted ? CDim : CFg, st->muted ? "mute" : pct);
 		}
@@ -1037,7 +1051,7 @@ layout(void)
 	y += lh;
 	drawaudio(&y, &sink, "volume", RVol);
 	drawpicker(&y, sinks, nsinks, "output", ROut, &psink);
-	drawaudio(&y, &source, "mic", RMic);
+	drawaudio(&y, &source, "micro", RMic);
 	drawpicker(&y, sources, nsources, "input", RIn, &psource);
 	drawstreams(&y);
 	separator(&y);
@@ -1076,7 +1090,7 @@ draw(void)
 static void
 setvolume(Audio *a, const char *arg)
 {
-	run("wpctl set-volume -l 1 %s %s >/dev/null 2>&1", a->node, arg);
+	run(SETVOL "%s %s >/dev/null 2>&1", a->node, arg);
 	kick();
 }
 
@@ -1102,16 +1116,16 @@ drag(int x)
 	int i;
 
 	if (dragaudio) {
-		dragaudio->vol = barfrac(dragaudio->bar, x);
+		dragaudio->vol = barfrac(dragaudio->bar, x) * VOLMAX;
 		snprintf(arg, sizeof(arg), "%.2f", dragaudio->vol);
-		run("wpctl set-volume -l 1 %s %s >/dev/null 2>&1", dragaudio->node, arg);
+		run(SETVOL "%s %s >/dev/null 2>&1", dragaudio->node, arg);
 		return;
 	}
 	for (i = 0; i < nstreams; i++) {
 		if (streams[i].id == dragid) {
-			streams[i].vol = barfrac(streams[i].bar, x);
+			streams[i].vol = barfrac(streams[i].bar, x) * VOLMAX;
 			snprintf(arg, sizeof(arg), "%.2f", streams[i].vol);
-			runid("wpctl set-volume -l 1 %d %s >/dev/null 2>&1", dragid, arg);
+			runid(SETVOL "%d %s >/dev/null 2>&1", dragid, arg);
 		}
 	}
 }
@@ -1168,7 +1182,7 @@ adjust(int delta)
 		setdefault(sources, nsources, delta, 1);
 		break;
 	default:
-		runid("wpctl set-volume -l 1 %d %s >/dev/null 2>&1", streams[sel - RApp].id, arg);
+		runid(SETVOL "%d %s >/dev/null 2>&1", streams[sel - RApp].id, arg);
 		kick();
 	}
 }
@@ -1228,9 +1242,9 @@ streamclick(int b, int x, int y)
 			continue;
 		sel = RApp + i;
 		if (b == Button4)
-			runid("wpctl set-volume -l 1 %d %s >/dev/null 2>&1", st->id, "5%+");
+			runid(SETVOL "%d %s >/dev/null 2>&1", st->id, "5%+");
 		else if (b == Button5)
-			runid("wpctl set-volume -l 1 %d %s >/dev/null 2>&1", st->id, "5%-");
+			runid(SETVOL "%d %s >/dev/null 2>&1", st->id, "5%-");
 		else if (b == Button3 || (b == Button1 && inrect(st->label, x, y)))
 			runid("wpctl set-mute %d %s >/dev/null 2>&1", st->id, "toggle");
 		else if (b == Button1) {
