@@ -99,8 +99,8 @@ static Stream streams[12];
 static int nstreams;
 static Audio *dragaudio;
 static int dragid = -1;
-static char gpuname[96], gpuinfo[96];
-static int gpuutil = -1, gpumemused, gpumemtotal, gputemp;
+static char gpuname[96];
+static int gpuutil = -1, gpumemused, gpumemtotal, gputemp, gpuclock, gpuclockmax;
 
 
 typedef struct {
@@ -108,8 +108,8 @@ typedef struct {
 	Stream streams[12];
 	int nsinks, nsources, nstreams;
 	Audio sink, source;
-	char gpuname[96], gpuinfo[96];
-	int gpuutil, gpumemused, gpumemtotal, gputemp;
+	char gpuname[96];
+	int gpuutil, gpumemused, gpumemtotal, gputemp, gpuclock, gpuclockmax;
 } Poll;
 
 static Poll ready;
@@ -348,23 +348,25 @@ static void
 gpuread(Poll *d)
 {
 	char line[256], name[96];
-	int util = 0, used = 0, total = 0, temp = 0;
+	int util = 0, used = 0, total = 0, clock = 0, clockmax = 0;
+	float temp = 0;
 	FILE *fp;
 
-	d->gpuname[0] = d->gpuinfo[0] = '\0';
+	d->gpuname[0] = '\0';
 	if (access("/usr/bin/nvidia-smi", X_OK))
 		return;
-	if (!(fp = popen("nvidia-smi --query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu "
-	                 "--format=csv,noheader,nounits 2>/dev/null", "r")))
+	if (!(fp = popen("nvidia-smi --query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu,"
+	                 "clocks.gr,clocks.max.gr --format=csv,noheader,nounits 2>/dev/null", "r")))
 		return;
 	if (fgets(line, sizeof(line), fp) &&
-	    sscanf(line, "%95[^,], %d, %d, %d, %d", name, &util, &used, &total, &temp) == 5) {
+	    sscanf(line, "%95[^,], %d, %d, %d, %f, %d, %d", name, &util, &used, &total, &temp, &clock, &clockmax) == 7) {
 		snprintf(d->gpuname, sizeof(d->gpuname) - 4, "%s", name);
-		snprintf(d->gpuinfo, sizeof(d->gpuinfo), "%d%%  %.1f / %.1f GiB  %d°C", util, used / 1024.0, total / 1024.0, temp);
 		d->gpuutil = util;
+		d->gpuclock = clock;
+		d->gpuclockmax = clockmax;
 		d->gpumemused = used;
 		d->gpumemtotal = total;
-		d->gputemp = temp;
+		d->gputemp = (int)(temp + 0.5);
 	}
 	pclose(fp);
 }
@@ -459,11 +461,12 @@ publish(void)
 		source.muted = ready.source.muted;
 		source.valid = ready.source.valid;
 		memcpy(gpuname, ready.gpuname, sizeof(gpuname));
-		memcpy(gpuinfo, ready.gpuinfo, sizeof(gpuinfo));
 		gpuutil = ready.gpuutil;
 		gpumemused = ready.gpumemused;
 		gpumemtotal = ready.gpumemtotal;
 		gputemp = ready.gputemp;
+		gpuclock = ready.gpuclock;
+		gpuclockmax = ready.gpuclockmax;
 	}
 	pthread_mutex_unlock(&plock);
 }
@@ -1126,7 +1129,9 @@ layoutsys(int y)
 		textr(W - pad, y, CDim, v);
 		y += lh;
 		snprintf(v, sizeof(v), "%d%%", gpuutil);
-		meter(&y, "usage", gpuutil / 100.0, CAccent, v, "100%");
+		meter(&y, "usage", gpuutil / 100.0, CAccent, v, "0000 MHz");
+		snprintf(v, sizeof(v), "%d MHz", gpuclock);
+		meter(&y, "clock", gpuclockmax ? (double)gpuclock / gpuclockmax : 0, CAccent, v, "0000 MHz");
 		snprintf(v, sizeof(v), "%.1f / %.1f GiB", gpumemused / 1024.0, gpumemtotal / 1024.0);
 		meter(&y, "vram", gpumemtotal ? (double)gpumemused / gpumemtotal : 0, CMag, v, NULL);
 		snprintf(v, sizeof(v), "%d°C", gputemp);
