@@ -1,0 +1,255 @@
+@-moz-document url(chrome://browser/content/browser.xhtml) {
+	:root {
+		--d-bg: #15161e;
+		--d-page: rgba(21, 22, 30, 0.8);
+		--d-hover: #1d1e27;
+		--d-sel: #2d2f3b;
+		--d-fg: #c8d3f5;
+		--d-dim: #a6b0d8;
+		--d-acc: #82aaff;
+		--d-side: clamp(150px, 15%, 240px);
+		--border-radius-small: 0px !important;
+		--border-radius-medium: 0px !important;
+		--border-radius-large: 0px !important;
+		--border-radius-xlarge: 0px !important;
+		--border-radius-circle: 0px !important;
+		--tab-border-radius: 0px !important;
+		--toolbarbutton-border-radius: 0px !important;
+		--urlbar-icon-border-radius: 0px !important;
+		--panel-border-radius: 0px !important;
+		--arrowpanel-border-radius: 0px !important;
+		--toolbar-bgcolor: var(--d-bg) !important;
+		--toolbar-color: var(--d-fg) !important;
+		--toolbar-field-background-color: var(--d-bg) !important;
+		--toolbar-field-focus-background-color: var(--d-bg) !important;
+		--toolbar-field-border-color: transparent !important;
+		--toolbar-field-border-color-focus: var(--d-acc) !important;
+		--toolbar-field-focus-border-color: var(--d-acc) !important;
+		--toolbar-field-color: var(--d-fg) !important;
+		--toolbar-field-focus-color: var(--d-fg) !important;
+		--toolbarbutton-hover-background: var(--d-sel) !important;
+		--toolbarbutton-active-background: var(--d-sel) !important;
+		--chrome-content-separator-color: var(--d-bg) !important;
+		--sidebar-background-color: var(--d-bg) !important;
+		--sidebar-border-color: transparent !important;
+		--tabpanel-background-color: transparent !important;
+		--tab-selected-bgcolor: var(--d-sel) !important;
+		--tab-hover-background-color: var(--d-hover) !important;
+		--focus-outline-color: var(--d-acc) !important;
+		--panel-background: var(--d-bg) !important;
+		--panel-color: var(--d-fg) !important;
+		--panel-border-color: var(--d-acc) !important;
+		--arrowpanel-background: var(--d-bg) !important;
+		--arrowpanel-color: var(--d-fg) !important;
+		--arrowpanel-border-color: var(--d-acc) !important;
+		--panel-item-hover-bgcolor: var(--d-sel) !important;
+		--button-hover-bgcolor: var(--d-sel) !important;
+		font-family: monospace !important;
+	}
+
+	:root, body, #browser, #tabbrowser-tabbox, #tabbrowser-tabpanels browser, #nav-bar, #TabsToolbar, #titlebar {
+		background: transparent !important;
+	}
+	#navigator-toolbox, #nav-bar, #TabsToolbar, #titlebar, #sidebar-container, #sidebar-box,
+	#tabbrowser-tabbox, #tabbrowser-tabpanels {
+		border: none !important;
+		box-shadow: none !important;
+	}
+	#navigator-toolbox, #sidebar-container {
+		background: var(--d-bg) !important;
+	}
+	#tabbrowser-tabpanels {
+		background: var(--d-page) !important;
+		box-shadow: inset 0 1px var(--d-bg) !important;
+	}
+	#navigator-toolbox::after {
+		display: none !important;
+	}
+	#tabbrowser-tabbox {
+		margin: 0 !important;
+		outline: none !important;
+		border-radius: 0 !important;
+	}
+	#sidebar-launcher-splitter {
+		width: 1px !important;
+		min-width: 1px !important;
+		margin: 0 !important;
+		border: none !important;
+		background: var(--d-sel) !important;
+	}
+
+	.titlebar-buttonbox-container, .titlebar-spacer, #PersonalToolbar,
+	#firefox-view-button, #alltabs-button, #sidebar-button, #fxa-toolbar-menu-button, #new-tab-button,
+	#reset-pbm-toolbar-button, #smartwindow-group-tabs-button, #ai-window-toggle, #vertical-spacer,
+	#star-button-box, #pageActionButton, #reader-mode-button, #picture-in-picture-button,
+	#translations-button, #tracking-protection-icon-container,
+	#identity-icon-label, #trust-label, .searchmode-switcher, .urlbar-page-action,
+	#sidebar-tools-and-extensions-splitter, .tab-secondary-label {
+		display: none !important;
+	}
+
+	#sidebar-container {
+		width: var(--d-side) !important;
+		min-width: var(--d-side) !important;
+		max-width: var(--d-side) !important;
+	}
+	#nav-bar {
+		position: relative !important;
+		padding-block: 6px !important;
+	}
+	#nav-bar toolbarspring {
+		display: none !important;
+	}
+	#downloads-button {
+		margin-inline-start: auto !important;
+	}
+	#urlbar-container {
+		position: absolute !important;
+		inset-block: 0 !important;
+		inset-inline-start: max(calc(var(--d-side) + 9px), calc(50% + var(--d-side) / 2 - 400px)) !important;
+		inset-inline-end: max(120px, calc(50% - var(--d-side) / 2 - 400px)) !important;
+		width: auto !important;
+		max-width: none !important;
+		min-width: 0 !important;
+		margin: 0 !important;
+		padding: 0 !important;
+		display: flex !important;
+		align-items: center !important;
+	}
+	#urlbar-container > #urlbar {
+		width: 100% !important;
+	}
+	#urlbar {
+		--urlbar-background-color: var(--d-bg) !important;
+		--urlbar-background-color-focus: var(--d-bg) !important;
+		--urlbar-border-radius: 0px !important;
+		--urlbar-inner-border-radius: 0px !important;
+		--urlbarview-border-radius: 0px !important;
+		--urlbar-background-border-radius: 0px !important;
+		--urlbar-background-border-top-radius-open: 0px !important;
+		--urlbar-background-overhang-open: 0px !important;
+		--urlbar-input-growth-open-inline: 0px !important;
+		--urlbar-input-growth-open-block: 0px !important;
+		--urlbar-background-box-shadow-open: none !important;
+		--urlbar-background-border: 1px solid transparent !important;
+		--urlbar-background-border-open: 1px solid var(--d-acc) !important;
+		--urlbar-background-border-focused: 1px solid var(--d-acc) !important;
+	}
+	#urlbar:not([focused]) #urlbar-input {
+		text-align: center !important;
+		color: var(--d-dim) !important;
+	}
+	#urlbar-input, .urlbarView-row {
+		font-family: monospace !important;
+	}
+	.urlbarView {
+		background: var(--d-bg) !important;
+		border: 1px solid var(--d-acc) !important;
+		border-top: none !important;
+		box-shadow: none !important;
+		margin-inline: 0 !important;
+	}
+	.urlbarView-row-inner, .urlbarView-favicon, .urlbarView-action {
+		border-radius: 0 !important;
+	}
+	.urlbarView-row:not([selected]):hover > .urlbarView-row-inner {
+		background: var(--d-hover) !important;
+	}
+	.urlbarView-row[selected] > .urlbarView-row-inner {
+		background: var(--d-sel) !important;
+		color: #ffffff !important;
+		box-shadow: inset 2px 0 0 var(--d-acc) !important;
+	}
+	.urlbarView-row[selected] .urlbarView-action, .urlbarView-row[selected] .urlbarView-url {
+		color: var(--d-acc) !important;
+	}
+
+	toolbarbutton, .toolbarbutton-1 > .toolbarbutton-icon, .toolbarbutton-1 > .toolbarbutton-badge-stack {
+		border-radius: 0 !important;
+	}
+
+	#tabbrowser-tabs .tabbrowser-tab {
+		padding: 0 !important;
+		margin: 0 !important;
+		min-height: 36px !important;
+	}
+	.tabbrowser-tab .tab-background {
+		margin: 0 !important;
+		border-radius: 0 !important;
+		box-shadow: none !important;
+		outline: none !important;
+		background: transparent !important;
+	}
+	.tabbrowser-tab:hover .tab-background {
+		background: var(--d-hover) !important;
+	}
+	.tabbrowser-tab[selected] .tab-background {
+		background: var(--d-sel) !important;
+		box-shadow: inset 2px 0 0 var(--d-acc) !important;
+	}
+	.tabbrowser-tab .tab-content {
+		min-height: 36px !important;
+		padding-inline: 14px 8px !important;
+		gap: 10px !important;
+	}
+	.tabbrowser-tab .tab-label {
+		font-family: monospace !important;
+		font-size: 15px !important;
+		color: var(--d-dim) !important;
+	}
+	.tabbrowser-tab:hover .tab-label {
+		color: var(--d-fg) !important;
+	}
+	.tabbrowser-tab[selected] .tab-label {
+		color: #ffffff !important;
+	}
+	.tabbrowser-tab .tab-close-button {
+		visibility: hidden !important;
+		border-radius: 0 !important;
+		width: 20px !important;
+		height: 20px !important;
+		padding: 4px !important;
+	}
+	.tabbrowser-tab:hover .tab-close-button {
+		visibility: visible !important;
+	}
+	.tabbrowser-tab .tab-close-button:hover {
+		background: #ff757f !important;
+		color: var(--d-bg) !important;
+	}
+	#tabs-newtab-button, #vertical-tabs-newtab-button {
+		margin: 0 !important;
+		padding-block: 0 !important;
+		padding-inline: 14px 8px !important;
+		min-height: 36px !important;
+		border-radius: 0 !important;
+	}
+	#tabs-newtab-button > .toolbarbutton-icon, #vertical-tabs-newtab-button > .toolbarbutton-icon {
+		margin: 0 !important;
+		width: 16px !important;
+		height: 16px !important;
+		padding: 0 !important;
+		background: transparent !important;
+		opacity: 0.6;
+	}
+	#tabs-newtab-button > .toolbarbutton-text, #vertical-tabs-newtab-button > .toolbarbutton-text {
+		font: 15px monospace !important;
+		color: var(--d-dim) !important;
+		margin: 0 !important;
+		padding-inline: 18px 0 !important;
+	}
+	#tabs-newtab-button:hover, #vertical-tabs-newtab-button:hover {
+		background: var(--d-hover) !important;
+	}
+
+	menupopup, panel {
+		--panel-border-radius: 0px !important;
+		font-family: monospace !important;
+	}
+	menupopup::part(content), panel::part(content) {
+		border-radius: 0 !important;
+		border: 1px solid var(--d-acc) !important;
+		background: var(--d-bg) !important;
+		box-shadow: none !important;
+	}
+}

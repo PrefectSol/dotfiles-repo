@@ -1,0 +1,94 @@
+#!/bin/bash
+dir=${XDG_DATA_HOME:-$HOME/.local/share}/distro/clipboard
+meta=$dir/.meta
+
+restore() {
+	local path=$1 tmp u
+	case $path in
+	*.txt) xclip -selection clipboard -i "$path" ;;
+	*.uri)
+		tmp=$(mktemp -d)
+		{ echo copy; cat "$path"; } >"$tmp/gnome"
+		while IFS= read -r u; do
+			u=${u#file://}
+			printf '%b\n' "${u//%/\\x}"
+		done <"$path" >"$tmp/paths"
+		distro-clipserve text/uri-list "$path" x-special/gnome-copied-files "$tmp/gnome" \
+			UTF8_STRING "$tmp/paths" text/plain "$tmp/paths"
+		rm -rf "$tmp"
+		;;
+	*) xclip -selection clipboard -t "image/${path##*.}" -i "$path" ;;
+	esac
+}
+
+label() {
+	local path=$1 n text first size
+	case $path in
+	*.txt)
+		n=$(grep -c '' "$path")
+		text=$(head -c 400 "$path" | tr '\n\t' '  ' | tr -s ' ' | cut -c1-110)
+		((n > 1)) && text+="  [$n lines]"
+		echo "$text"
+		;;
+	*.uri)
+		first=$(head -1 "$path")
+		first=${first#file://}
+		first=$(printf '%b' "${first//%/\\x}")
+		n=$(grep -c '' "$path")
+		text="[files] ${first##*/}"
+		((n > 1)) && text+=" +$((n - 1))"
+		echo "$text"
+		;;
+	*)
+		size=$(file -b "$path" | grep -oE '[0-9]+ ?x ?[0-9]+' | head -1 | tr -d ' ')
+		echo "[img ${size:-?}]"
+		;;
+	esac
+}
+
+clear() {
+	rm -rf "$dir"/* "$meta"
+	xclip -selection clipboard -i /dev/null
+}
+
+case $1 in
+restore)
+	[[ -f $2 ]] && restore "$2"
+	exit 0
+	;;
+label)
+	mkdir -p "$meta"
+	label "$2" >"$meta/${2##*/}"
+	exit 0
+	;;
+clear)
+	clear
+	exit 0
+	;;
+rm)
+	[[ $2 == "$dir"/* ]] && rm -f "$2" "$meta/${2##*/}"
+	exit 0
+	;;
+esac
+[[ -d $dir ]] || exit 0
+lines=()
+while read -r ts path; do
+	f=${path##*/}
+	[[ -f $meta/$f ]] || "$0" label "$path"
+	printf -v t '%(%H:%M)T' "${ts%.*}"
+	lines+=("$t  $(<"$meta/$f")"$'\t'"$path")
+done < <(stat -c '%Y %n' "$dir"/* 2>/dev/null | sort -rn)
+((${#lines[@]})) || exit 0
+chosen=$(printf '%s\n' "${lines[@]}" | dmenu -P -l 8 -p clipboard -K v -d 'distro-clip rm "$1"' "$@")
+case $? in
+0) ;;
+11)
+	clear
+	exit 0
+	;;
+*) exit 0 ;;
+esac
+path=${chosen##*$'\t'}
+[[ $chosen == *$'\t'* && -f $path ]] || exit 0
+restore "$path"
+touch "$path"

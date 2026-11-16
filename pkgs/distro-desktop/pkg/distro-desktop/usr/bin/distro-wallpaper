@@ -1,0 +1,19 @@
+#!/bin/bash
+shopt -s nullglob nocaseglob
+dirs=("$HOME/pictures/wallpapers" /usr/share/backgrounds/distro)
+files=()
+for dir in "${dirs[@]}"; do
+	files=("$dir"/*.{png,jpg,jpeg})
+	((${#files[@]})) && break
+done
+IFS=$'\n' files=($(printf '%s\n' "${files[@]}" | sort -V))
+
+mons=($(xrandr --listactivemonitors | awk 'NR > 1 { name = $NF; if ($2 ~ /\*/) print "0 " name; else print NR " " name }' | sort -n | cut -d' ' -f2))
+
+((${#files[@]})) || exec xwallpaper --tile /usr/share/distro/solid.png
+
+args=()
+for i in "${!mons[@]}"; do
+	args+=(--output "${mons[i]}" --zoom "${files[i % ${#files[@]}]}")
+done
+exec xwallpaper "${args[@]}"

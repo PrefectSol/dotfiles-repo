@@ -250,9 +250,9 @@ medianame(Stream *st)
 static void
 audiostatus(Poll *d)
 {
-	char line[512], dup[sizeof(d->streams) / sizeof(d->streams[0])] = { 0 }, *p, *q, *e;
+	char line[512], *p, *q, *e;
 	FILE *fp;
-	int section = 0, inaudio = 0, indent, top = -1, i, j;
+	int section = 0, inaudio = 0, indent, top = -1, i;
 	Node *n;
 
 	d->nsinks = d->nsources = d->nstreams = 0;
@@ -329,15 +329,10 @@ audiostatus(Poll *d)
 			n->name[i] = '\0';
 	}
 	pclose(fp);
-	for (i = 0; i < d->nstreams; i++)
-		for (j = i + 1; j < d->nstreams; j++)
-			if (!strcmp(d->streams[i].name, d->streams[j].name))
-				dup[i] = dup[j] = 1;
 	for (i = 0; i < d->nstreams; i++) {
 		char id[16];
 
-		if (dup[i])
-			medianame(&d->streams[i]);
+		medianame(&d->streams[i]);
 
 		snprintf(id, sizeof(id), "%d", d->streams[i].id);
 		d->streams[i].valid = volread(id, &d->streams[i].vol, &d->streams[i].muted);

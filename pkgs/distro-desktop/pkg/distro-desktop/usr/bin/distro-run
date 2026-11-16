@@ -1,0 +1,13 @@
+#!/bin/sh
+hist=${XDG_STATE_HOME:-$HOME/.local/state}/distro/run
+mkdir -p "${hist%/*}"
+touch "$hist"
+cmd=$({ sort -rn "$hist" | cut -d' ' -f2-; dmenu_path; } | awk '!seen[$0]++' | dmenu -l 8 -p launcher -K space "$@") || exit 0
+[ -n "$cmd" ] || exit 0
+awk -v c="$cmd" '{ n = $1; sub(/^[0-9]+ /, ""); if ($0 == c) { n++; f = 1 } print n " " $0 } END { if (!f) print 1 " " c }' \
+	"$hist" >"$hist.tmp" && mv "$hist.tmp" "$hist"
+{
+	${SHELL:-/bin/sh} -c "$cmd"
+	[ $? -eq 127 ] || exit 0
+	awk -v c="$cmd" '{ s = $0; sub(/^[0-9]+ /, "", s); if (s != c) print }' "$hist" >"$hist.tmp" && mv "$hist.tmp" "$hist"
+} &

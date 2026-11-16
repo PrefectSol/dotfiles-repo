@@ -1,0 +1,47 @@
+#!/bin/bash
+export XDG_CURRENT_DESKTOP=distro
+export XDG_SESSION_DESKTOP=distro
+export XCURSOR_THEME=Vimix-cursors
+export XCURSOR_SIZE=30
+export _JAVA_AWT_WM_NONREPARENTING=1
+export QT_QPA_PLATFORMTHEME=gtk3
+
+share=/usr/share/distro
+xrdb -merge "$share/Xresources"
+[[ -f $HOME/.Xresources ]] && xrdb -merge "$HOME/.Xresources"
+xset s off -dpms
+setxkbmap $(setxkbmap -query | awk '$1 == "layout:" { print "-layout", $2 } $1 == "options:" { print "-option", $2 }')
+xsetroot -cursor_name left_ptr
+[[ -x $HOME/.config/distro/monitors ]] && "$HOME/.config/distro/monitors"
+distro-wallpaper
+
+dbus-update-activation-environment --systemd DISPLAY XAUTHORITY XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XCURSOR_THEME XCURSOR_SIZE QT_QPA_PLATFORMTHEME
+
+if [[ -e /proc/driver/nvidia/version ]]; then
+	primary=$(xrandr --query | awk '/ primary/ { print $1; exit }')
+	[[ -n $primary ]] && export __GL_SYNC_DISPLAY_DEVICE=$primary
+fi
+picom_args=(--config "$share/picom.conf")
+systemd-detect-virt -q && picom_args+=(--backend xrender)
+picom "${picom_args[@]}" &
+if [[ -f $HOME/.config/dunst/dunstrc ]]; then dunst & else dunst -conf "$share/dunstrc" & fi
+distro-clipd &
+/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 &
+dwmblocks &
+distro-lang -w 3 &
+trap 'kill $(jobs -p) 2>/dev/null' EXIT
+
+marker=$XDG_RUNTIME_DIR/distro-logout
+rm -f "$marker"
+fails=0
+while :; do
+	start=$SECONDS
+	dwm
+	[[ -e $marker ]] && break
+	if ((SECONDS - start < 3)); then
+		((++fails >= 5)) && break
+	else
+		fails=0
+	fi
+done
+rm -f "$marker"

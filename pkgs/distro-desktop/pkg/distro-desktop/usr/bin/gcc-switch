@@ -1,0 +1,53 @@
+#!/bin/bash
+set -euo pipefail
+shim=${XDG_DATA_HOME:-$HOME/.local/share}/distro/gcc/bin
+tools=(gcc g++ cc c++ cpp gcov gcc-ar gcc-nm gcc-ranlib)
+base=$(/usr/bin/gcc -dumpversion)
+base=${base%%.*}
+
+versions() {
+	{
+		echo "$base"
+		for f in /usr/bin/gcc-[0-9]*; do
+			v=${f##*-}
+			[[ $v =~ ^[0-9]+$ ]] && echo "$v"
+		done
+	} | sort -nu
+}
+
+current() {
+	local v
+	if [[ -L $shim/gcc ]]; then
+		v=$(readlink "$shim/gcc")
+		echo "${v##*-}"
+	else
+		echo "$base"
+	fi
+}
+
+case ${1:-list} in
+list)
+	cur=$(current)
+	for v in $(versions); do
+		bin=/usr/bin/gcc-$v
+		[[ $v == "$base" ]] && bin=/usr/bin/gcc
+		printf ' %s %s (%s)\n' "$([[ $v == "$cur" ]] && echo '*' || echo ' ')" "$v" "$("$bin" -dumpfullversion)"
+	done
+	;;
+set)
+	v=${2:-}
+	versions | grep -qx "$v" || { echo "gcc $v is not installed, see: gcc-switch list" >&2; exit 1; }
+	rm -rf "$shim"
+	if [[ $v != "$base" ]]; then
+		mkdir -p "$shim"
+		for t in "${tools[@]}"; do
+			[[ -x /usr/bin/$t-$v ]] && ln -s "/usr/bin/$t-$v" "$shim/$t"
+		done
+	fi
+	echo "gcc $v ($(PATH=$shim:$PATH gcc -dumpfullversion))"
+	;;
+*)
+	echo "usage: gcc-switch [list | set VERSION]" >&2
+	exit 1
+	;;
+esac

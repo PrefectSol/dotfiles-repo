@@ -1,0 +1,69 @@
+#!/bin/bash
+dir=${XDG_DATA_HOME:-$HOME/.local/share}/distro/clipboard
+old=${XDG_CACHE_HOME:-$HOME/.cache}/distro-clip
+max=${DISTRO_CLIP_MAX:-128}
+if [[ -d $old && ! -d $dir ]]; then
+	mkdir -p "${dir%/*}"
+	mv "$old" "$dir"
+fi
+mkdir -p "$dir"
+chmod 700 "$dir"
+newest=$(ls -1t "$dir" | head -1)
+last=
+file=
+if [[ -n $newest ]]; then
+	last=${newest%.*}
+	file=$dir/$newest
+	distro-clip restore "$file"
+fi
+
+store() {
+	local tmp=$1 ext=$2 sum old
+	sum=$(sha1sum "$tmp" | cut -c1-16)
+	if [[ $sum == "$last" ]]; then
+		rm -f "$tmp"
+		return
+	fi
+	last=$sum
+	file=$dir/$sum.$ext
+	if [[ -e $dir/$sum.$ext ]]; then
+		rm -f "$tmp"
+		touch "$dir/$sum.$ext"
+	else
+		mv "$tmp" "$dir/$sum.$ext"
+		distro-clip label "$dir/$sum.$ext"
+	fi
+	ls -1t "$dir" | tail -n +$((max + 1)) | while IFS= read -r old; do
+		rm -f "$dir/$old" "$dir/.meta/$old"
+	done
+}
+
+distro-clipwatch | while read -r event; do
+	if [[ $event == gone ]]; then
+		[[ -f $file ]] && distro-clip restore "$file"
+		continue
+	fi
+	targets=$(xclip -selection clipboard -t TARGETS -o 2>/dev/null) || continue
+	tmp=$(mktemp "$dir/.XXXXXX")
+	if grep -qx 'text/uri-list' <<<"$targets"; then
+		xclip -selection clipboard -t text/uri-list -o 2>/dev/null | tr -d '\r' | grep -v '^#' | grep . >"$tmp"
+		ext=uri
+	elif grep -qx 'x-special/gnome-copied-files' <<<"$targets"; then
+		xclip -selection clipboard -t x-special/gnome-copied-files -o 2>/dev/null | tail -n +2 | grep . >"$tmp"
+		ext=uri
+	elif type=$(grep -m1 -xE 'image/(png|jpeg)' <<<"$targets"); then
+		xclip -selection clipboard -t "$type" -o >"$tmp" 2>/dev/null
+		ext=${type#image/}
+	elif grep -qxE 'UTF8_STRING|STRING|TEXT|text/plain(;charset=utf-8)?' <<<"$targets"; then
+		xclip -selection clipboard -o >"$tmp" 2>/dev/null
+		ext=txt
+	else
+		rm -f "$tmp"
+		continue
+	fi
+	if [[ ! -s $tmp ]] || { [[ $ext == txt ]] && ! grep -q '[^[:space:]]' "$tmp"; }; then
+		rm -f "$tmp"
+		continue
+	fi
+	store "$tmp" "$ext"
+done
