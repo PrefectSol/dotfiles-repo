@@ -1,6 +1,6 @@
 pkgname=distro-desktop
 pkgver=0.1
-pkgrel=65
+pkgrel=66
 pkgdesc='dwm desktop session'
 arch=(any)
 license=(MIT)
@@ -28,6 +28,7 @@ package() {
   install -Dm644 "$f/share/user-dirs.dirs" "$pkgdir/etc/skel/.config/user-dirs.dirs"
   install -Dm644 -t "$pkgdir/etc/skel/.config/yazi" "$f/share/yazi/yazi.toml" "$f/share/yazi/theme.toml" "$f/share/yazi/init.lua" "$f/share/yazi/keymap.toml"
   install -Dm644 -t "$pkgdir/etc/skel/.config/yazi/plugins/center-image.yazi" "$f/share/yazi/plugins/center-image.yazi/main.lua"
+  install -Dm644 -t "$pkgdir/etc/skel/.config/yazi/plugins/dircount.yazi" "$f/share/yazi/plugins/dircount.yazi/main.lua"
   (cd "$f/share/nvim" && find . -type f -exec install -Dm644 {} "$pkgdir/etc/skel/.config/nvim/{}" \;)
   install -Dm644 "$f/share/nvim-system.lua" "$pkgdir/etc/xdg/nvim/plugin/distro.lua"
   install -Dm644 "$f/share/mime/distro-markdown.xml" "$pkgdir/usr/share/mime/packages/distro-markdown.xml"

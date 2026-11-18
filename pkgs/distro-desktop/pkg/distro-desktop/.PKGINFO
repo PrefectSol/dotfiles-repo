@@ -3,12 +3,12 @@
 pkgname = distro-desktop
 pkgbase = distro-desktop
 xdata = pkgtype=pkg
-pkgver = 0.1-65
+pkgver = 0.1-66
 pkgdesc = dwm desktop session
 url = 
-builddate = 1794759575
+builddate = 1795014533
 packager = Unknown Packager
-size = 5319305
+size = 5320920
 arch = any
 license = MIT
 depend = dwm
