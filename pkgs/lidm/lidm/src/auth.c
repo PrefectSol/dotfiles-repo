@@ -300,7 +300,7 @@ bool launch(char* user, char* passwd, struct session session, void (*cb)(void),
     return false;
   }
 
-  pam_handle_t* pamh = get_pamh(user, passwd);
+  pam_handle_t* pamh = get_pamh(user, passwd, session.type);
   if (pamh == NULL) {
     print_pam_msg("authentication failed", PAM_ERROR_MSG);
     return false;

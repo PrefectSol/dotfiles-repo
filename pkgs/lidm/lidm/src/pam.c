@@ -174,7 +174,18 @@ int pam_conversation(int num_msg, const struct pam_message** msg,
     pam_end(pamh, ret);     \
     return NULL;            \
   }
-pam_handle_t* get_pamh(char* user, char* passwd) {
+extern int vt;
+
+static int pam_putenv_kv(pam_handle_t* pamh, const char* key,
+                         const char* value) {
+  char* kv = NULL;
+  if (asprintf(&kv, "%s=%s", key, value) == -1) return PAM_BUF_ERR;
+  int ret = pam_putenv(pamh, kv);
+  free(kv);
+  return ret;
+}
+
+pam_handle_t* get_pamh(char* user, char* passwd, enum SessionType session_typ) {
   pam_handle_t* pamh = NULL;
   struct pam_conv_data conv_data = {.password = passwd,
                                     .display_pam_msg = print_pam_msg};
@@ -189,6 +200,15 @@ pam_handle_t* get_pamh(char* user, char* passwd) {
   CHECK_PAM_RET(pam_authenticate(pamh, 0))
   CHECK_PAM_RET(pam_acct_mgmt(pamh, 0))
   CHECK_PAM_RET(pam_setcred(pamh, PAM_ESTABLISH_CRED))
+  CHECK_PAM_RET(pam_putenv_kv(pamh, "XDG_SESSION_TYPE",
+                              xdg_ssession_type_str(session_typ)))
+  CHECK_PAM_RET(pam_putenv_kv(pamh, "XDG_SESSION_CLASS", "user"))
+  CHECK_PAM_RET(pam_putenv_kv(pamh, "XDG_SEAT", "seat0"))
+  if (vt > 0) {
+    char vtnr[16];
+    (void)snprintf(vtnr, sizeof(vtnr), "%d", vt);
+    CHECK_PAM_RET(pam_putenv_kv(pamh, "XDG_VTNR", vtnr))
+  }
   CHECK_PAM_RET(pam_open_session(pamh, 0))
   CHECK_PAM_RET(pam_setcred(pamh, PAM_REINITIALIZE_CRED))
 

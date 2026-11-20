@@ -28,6 +28,7 @@ struct pamh_getenv_status pamh_get_complete_env(pam_handle_t* NNULLABLE handle,
                                                 enum SessionType session_typ);
 
 void free_envlist(char* NULLABLE* NNULLABLE envlist);
-pam_handle_t* NULLABLE get_pamh(char* NNULLABLE user, char* NNULLABLE passwd);
+pam_handle_t* NULLABLE get_pamh(char* NNULLABLE user, char* NNULLABLE passwd,
+                                enum SessionType session_typ);
 
 #endif /* PAM_H */
